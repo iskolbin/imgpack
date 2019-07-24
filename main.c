@@ -15,6 +15,7 @@
 #include "cute_files.h"
 
 struct ImgPackContext {
+	int (*formatter)(struct ImgPackContext *ctx, FILE *output_file);
 	int forceSquare;
 	int forcePOT;
 	int trim;
@@ -28,16 +29,65 @@ struct ImgPackContext {
 	char **imagePaths;
 	int *imageOffsetX;
 	int *imageOffsetY;
+	int *imageSourceW;
+	int *imageSourceH;
 	struct stbrp_rect *imageRects;
 	int imagesUsed;
 	int imagesAllocated;
 	int width;
 	int height;
+	int scaleNumerator;
+	int scaleDenominator;
 
-	char *outputTexturePath;
+	char *outputImagePath;
 	char *outputDataPath;
 	char *name;
 };
+
+static int is_image_rotated(struct ImgPackContext *ctx, int id) {
+	if (id >= 0 && id < ctx->imagesUsed) {
+		return 0;
+	} else {
+		return -1;
+	}
+}
+
+static int is_image_trimmed(struct ImgPackContext *ctx, int id) {
+	if (id >= 0 && id < ctx->imagesUsed) {
+		int d = ctx->padding + ctx->extrude;
+		return ctx->imageOffsetX[id] != 0 || ctx->imageOffsetY[id] != 0 || ctx->imageSourceW[id] != ctx->imageRects[id].w-2*d || ctx->imageSourceH[id] != ctx->imageRects[id].h-2*d; 
+	} else {
+		return -1;
+	}
+}
+
+static const char *get_output_image_format(struct ImgPackContext *ctx) {
+	return "RGBA8888";
+}
+
+static struct stbrp_rect get_frame_rect(struct ImgPackContext *ctx, int id) {
+	struct stbrp_rect frame = {0};
+	if (id >= 0 && id < ctx->imagesUsed) {
+		int d = ctx->padding + ctx->extrude;
+		frame.x = ctx->imageRects[id].x + d;
+		frame.y = ctx->imageRects[id].y + d;
+		frame.w = ctx->imageRects[id].w - 2*d;
+		frame.h = ctx->imageRects[id].h - 2*d;
+	}
+	return frame;
+}
+
+#include "formatters/C.h"
+#include "formatters/JSON_ARRAY.h"
+#include "formatters/JSON_HASH.h"
+
+static int parse_format(struct ImgPackContext *ctx, const char *s) {
+	if (!strcmp(s, "C")) ctx->formatter = imgpack_formatter_C;
+	else if (!strcmp(s, "JSON_ARRAY")) ctx->formatter = imgpack_formatter_JSON_ARRAY;
+	else if (!strcmp(s, "JSON_HASH")) ctx->formatter = imgpack_formatter_JSON_HASH;
+	else return 1;
+	return 0;
+}
 
 static void allocate_images_data(struct ImgPackContext *ctx) {
 	int next_size = ctx->imagesAllocated * 2;
@@ -46,6 +96,8 @@ static void allocate_images_data(struct ImgPackContext *ctx) {
 	ctx->imageRects = realloc(ctx->imageRects, next_size * sizeof(*ctx->imageRects));
 	ctx->imageOffsetX = realloc(ctx->imageOffsetX, next_size * sizeof(*ctx->imageOffsetX));
 	ctx->imageOffsetY = realloc(ctx->imageOffsetY, next_size * sizeof(*ctx->imageOffsetY));
+	ctx->imageSourceW = realloc(ctx->imageSourceW, next_size * sizeof(*ctx->imageSourceW));
+	ctx->imageSourceH = realloc(ctx->imageSourceH, next_size * sizeof(*ctx->imageSourceH));
 	ctx->imagesAllocated = next_size;
 }
 
@@ -55,6 +107,8 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 		allocate_images_data(ctx);
 	}
 	ctx->imagesUsed++;
+	ctx->imageSourceW[id] = width;
+	ctx->imageSourceH[id] = height;
 	int minY = 0, minX = 0, maxY = height-1, maxX = width-1;
 	if (ctx->trim) {
 		for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) if (data[4*(y*width+x)+3] != 0) {
@@ -157,45 +211,22 @@ static void pack_images(struct ImgPackContext *ctx) {
 	free(nodes);
 }
 
-static void write_atlas_data(struct ImgPackContext *ctx) {
+static int write_atlas_data(struct ImgPackContext *ctx) {
 	FILE *output_file = fopen(ctx->outputDataPath, "w+");
+	int status = 1;
 	if (output_file) {
 		if (ctx->verbose) printf("Writing description data to \"%s\"\n", ctx->outputDataPath);
-		fprintf(output_file, "enum %sIds = {\n", ctx->name);
-		for (int i = 0; i < ctx->imagesUsed; i++) {
-			char *image_path = ctx->imagePaths[i];
-			int point_pos, start_pos;
-			for (point_pos = strlen(image_path)-1; point_pos > 0 && image_path[point_pos] != '.'; point_pos--) {}
-			for (start_pos = point_pos-1; start_pos > 0 && (isalnum(image_path[start_pos-1]) || image_path[start_pos-1] == '_'); start_pos--) {}
-			char buffer[512];
-			int j;
-			for (j = 0; j < point_pos-start_pos; j++) {
-				char ch = image_path[start_pos+j];
-				if (ch >= 'a' && ch <= 'z') buffer[j] = ch - 32;
-				else buffer[j] = ch;
-			}
-			buffer[j] = '\0';
-			fprintf(output_file, "\t%s%s = %d,\n", ctx->name, buffer, i);
-		}
-		fprintf(output_file, "};\n\n");
-		fprintf(output_file, "static const char * %sPaths[%d] = {\n", ctx->name, ctx->imagesUsed);
-		for (int i = 0; i < ctx->imagesUsed; i++) {
-			fprintf(output_file, "\t\"%s\",\n", ctx->imagePaths[i]);
-		}
-		fprintf(output_file, "};\n\n");
-
-		fprintf(output_file, "static stbrp_rect %sRects[%d] = {\n", ctx->name, ctx->imagesUsed);
-		for (int i = 0; i < ctx->imagesUsed; i++) {
-			fprintf(output_file, "\t{%d, %d, %d, %d, %d},\n", i, ctx->imageRects[i].x, ctx->imageRects[i].y, ctx->imageRects[i].w, ctx->imageRects[i].h);
-		}
-		fprintf(output_file, "};");
+		status = ctx->formatter(ctx, output_file);
 		fclose(output_file);
+	} else {
+		printf("Cannot open for writing \"%s\"", ctx->outputDataPath);
 	}
+	return status;
 }
 
-static void write_atlas_texture(struct ImgPackContext *ctx) {
+static int write_atlas_image(struct ImgPackContext *ctx) {
 	unsigned char *output_data = malloc(4 * ctx->width * ctx->height);
-	if (ctx->verbose) printf("Drawing atlas image to \"%s\"\n", ctx->outputTexturePath);
+	if (ctx->verbose) printf("Drawing atlas image to \"%s\"\n", ctx->outputImagePath);
 	for (int i = 0; i < ctx->imagesUsed; i++) {
 		struct stbrp_rect rect = ctx->imageRects[i];
 		int x0 = ctx->imageOffsetX[i], y0 = ctx->imageOffsetY[i];
@@ -297,8 +328,9 @@ static void write_atlas_texture(struct ImgPackContext *ctx) {
 		}
 		stbi_image_free(image_data);
 	}
-	stbi_write_png(ctx->outputTexturePath, ctx->width, ctx->height, 4, output_data, ctx->width*4);
+	stbi_write_png(ctx->outputImagePath, ctx->width, ctx->height, 4, output_data, ctx->width*4);
 	free(output_data);
+	return 0;
 }
 
 static void clear_context(struct ImgPackContext *ctx) {
@@ -309,24 +341,28 @@ static void clear_context(struct ImgPackContext *ctx) {
 	free(ctx->imageRects);
 	free(ctx->imageOffsetX);
 	free(ctx->imageOffsetY);
+	free(ctx->imageSourceW);
+	free(ctx->imageSourceH);
 	ctx->imagePaths = NULL;
 	ctx->imageRects = NULL;
 	ctx->imageOffsetX = NULL;
 	ctx->imageOffsetY = NULL;
+	ctx->imageSourceW = NULL;
+	ctx->imageSourceH = NULL;
 	ctx->imagesUsed = 0;
 	ctx->imagesAllocated = 0;
 }
 
 int main(int argc, char *argv[]) {
-	struct ImgPackContext ctx = {0};
+	struct ImgPackContext ctx = {.scaleNumerator = 1, .scaleDenominator = 1};
 	char *imagesPath = argv[argc-1];
 	for (int i = 0; i < argc; i++) {
 		if (!strcmp(argv[i], "--name")) {
 			ctx.name = argv[++i];
 		} else if (!strcmp(argv[i], "--data")) {
 			ctx.outputDataPath = argv[++i];
-		} else if (!strcmp(argv[i], "--texture")) {
-			ctx.outputTexturePath = argv[++i];
+		} else if (!strcmp(argv[i], "--image")) {
+			ctx.outputImagePath = argv[++i];
 		} else if (!strcmp(argv[i], "--force-pot")) {
 			ctx.forcePOT = 1;
 		} else if (!strcmp(argv[i], "--trim")) {
@@ -337,13 +373,24 @@ int main(int argc, char *argv[]) {
 			ctx.extrude = strtol(argv[++i], NULL, 10);
 		} else if (!strcmp(argv[i], "--verbose")) {
 			ctx.verbose = 1;
+		} else if (!strcmp(argv[i], "--format")) {
+			if (!parse_format(&ctx, argv[++i])) {
+				if (ctx.verbose) printf("Using format %s", argv[i]);
+			} else {
+				printf("Bad format \"%s\"\n", argv[i]);
+				return 1;
+			}
 		}
 	}
 
+	if (!ctx.formatter) {
+		printf("Specify format\n");
+		return 1;
+	}
 	get_images_data(&ctx, imagesPath);
 	pack_images(&ctx);
-	if (ctx.outputDataPath) write_atlas_data(&ctx);
-	if (ctx.outputTexturePath) write_atlas_texture(&ctx);
+	if (ctx.outputDataPath && write_atlas_data(&ctx)) return 1;
+	if (ctx.outputImagePath && write_atlas_image(&ctx)) return 1;
 	clear_context(&ctx);
 	return 0;
 }
