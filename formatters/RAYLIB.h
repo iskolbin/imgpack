@@ -1,4 +1,4 @@
-static int imgpack_formatter_C(struct ImgPackContext *ctx, FILE *f) {
+static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	fprintf(f, "enum %sIds {\n", ctx->name);
 	for (int i = 0; i < ctx->imagesUsed; i++) {
 		char *image_path = ctx->imagePaths[i];
@@ -19,16 +19,16 @@ static int imgpack_formatter_C(struct ImgPackContext *ctx, FILE *f) {
 
 	fprintf(f, "static const char *%sImage = \"%s\";\n\n", ctx->name, ctx->outputImagePath);
 
-	fprintf(f, "static const int %sScale[2] = {%d, %d};\n\n", ctx->name, ctx->scaleNumerator, ctx->scaleDenominator);
-
-	fprintf(f, "static const int %sFrame[%d][4] = {\n", ctx->name, ctx->imagesUsed);
+	fprintf(f, "static const Vector2 %sScale = {%d, %d};\n\n", ctx->name, ctx->scaleNumerator, ctx->scaleDenominator);
+	
+	fprintf(f, "static const Rectangle %sFrame[%d] = {\n", ctx->name, ctx->imagesUsed);
 	for (int i = 0; i < ctx->imagesUsed; i++) {
 		struct stbrp_rect frame = get_frame_rect(ctx, i);
 		fprintf(f, "\t{%d, %d, %d, %d},\n", frame.x, frame.y, frame.w, frame.h);
 	}
 	fprintf(f, "};\n\n");
 
-	fprintf(f, "static const int %sSourceSize[%d][2] = {\n", ctx->name, ctx->imagesUsed);
+	fprintf(f, "static const Vector2 %sSourceSize[%d] = {\n", ctx->name, ctx->imagesUsed);
 	for (int i = 0; i < ctx->imagesUsed; i++) {
 		fprintf(f, "\t{%d, %d},\n", ctx->imageSourceW[i], ctx->imageSourceH[i]);
 	}
