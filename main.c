@@ -23,6 +23,7 @@ struct ImgPackContext {
 	int maxHeight;
 	int padding;
 	int extrude;
+	int verbose;
 
 	char **imagePaths;
 	int *imageOffsetX;
@@ -90,22 +91,21 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 		.w = maxX - minX + 1 + 2*(ctx->padding + ctx->extrude),
 		.h = maxY - minY + 1 + 2*(ctx->padding + ctx->extrude),
 	};
-	printf("  Added \"%s\" %dx%d(trimmed to %dx%d)\n", imgPath, width, height, maxX - minX + 1, maxY - minY + 1);
+	if (ctx->verbose) printf("  Added \"%s\" %dx%d(trimmed to %dx%d)\n", imgPath, width, height, maxX - minX + 1, maxY - minY + 1);
 }
 
 static int get_images_data(struct ImgPackContext *ctx, const char *dirPath) {
 	char buffer[512];
 	int count = 0;
 	cf_dir_t dir;
-	//DIR *dir = opendir(dirPath);
 	if (cf_dir_open(&dir, dirPath)) {
-		printf("Reading images data from \"%s\" directory\n", dirPath);
+		if (ctx->verbose) printf("Reading images data from \"%s\" directory\n", dirPath);
 		while(dir.has_next) {
 			//if (get_images_data(ctx, ent->d_name) == -1) {
 				int width, height, channels;
 				cf_file_t file;
 				cf_read_file (&dir, &file);
-				printf("  Reading %s\n", file.name);//dir.path);
+				if (ctx->verbose) printf("  Reading %s\n", file.name);
 				strcpy(buffer, dirPath);
 				strcat(buffer, "/");
 				strcat(buffer, file.name);
@@ -119,7 +119,7 @@ static int get_images_data(struct ImgPackContext *ctx, const char *dirPath) {
 			//}
 		}
 		cf_dir_close(&dir);
-		printf("From %s added %d images\n", dirPath, count);
+		if (ctx->verbose) printf("From %s added %d images\n", dirPath, count);
 		return count;
 	} else {
 		return -1;
@@ -143,7 +143,7 @@ static void pack_images(struct ImgPackContext *ctx) {
 	for (int i = 0; i < ctx->imagesUsed; i++) {
 		occupied_area += ((side_add+ctx->imageRects[i].w)*(side_add+ctx->imageRects[i].h));
 	}
-	printf("Occupied area is %d\n", occupied_area);
+	if (ctx->verbose) printf("Occupied area is %d\n", occupied_area);
 	int assumed_side_size = (int)(1.1*sqrt((double)occupied_area));
 	stbrp_node *nodes = malloc(sizeof(*nodes) * ctx->imagesUsed);
 	if (ctx->forcePOT) {
@@ -152,7 +152,7 @@ static void pack_images(struct ImgPackContext *ctx) {
 	ctx->width = assumed_side_size;
 	ctx->height = assumed_side_size;
 	stbrp_context rp_ctx = {0};
-	printf("Trying to pack %d images into %dx%d\n", ctx->imagesUsed, assumed_side_size, assumed_side_size);
+	if (ctx->verbose) printf("Trying to pack %d images into %dx%d\n", ctx->imagesUsed, assumed_side_size, assumed_side_size);
 	stbrp_init_target(&rp_ctx, assumed_side_size, assumed_side_size, nodes, ctx->imagesUsed);
 	stbrp_pack_rects(&rp_ctx, ctx->imageRects, ctx->imagesUsed);
 	free(nodes);
@@ -161,7 +161,7 @@ static void pack_images(struct ImgPackContext *ctx) {
 static void write_atlas_data(struct ImgPackContext *ctx) {
 	FILE *output_file = fopen(ctx->outputDataPath, "w+");
 	if (output_file) {
-		printf("Writing description data to \"%s\"\n", ctx->outputDataPath);
+		if (ctx->verbose) printf("Writing description data to \"%s\"\n", ctx->outputDataPath);
 		fprintf(output_file, "enum %sIds = {\n", ctx->idPrefix);
 		for (int i = 0; i < ctx->imagesUsed; i++) {
 			char *image_path = ctx->imagePaths[i];
@@ -196,14 +196,14 @@ static void write_atlas_data(struct ImgPackContext *ctx) {
 
 static void write_atlas_texture(struct ImgPackContext *ctx) {
 	unsigned char *output_data = malloc(4 * ctx->width * ctx->height);
-	printf("Drawing atlas image to \"%s\"\n", ctx->outputTexturePath);
+	if (ctx->verbose) printf("Drawing atlas image to \"%s\"\n", ctx->outputTexturePath);
 	for (int i = 0; i < ctx->imagesUsed; i++) {
 		struct stbrp_rect rect = ctx->imageRects[i];
 		int x0 = ctx->imageOffsetX[i], y0 = ctx->imageOffsetY[i];
 		int d = ctx->padding + ctx->extrude;
 		int w, h, n;
 		stbi_uc *image_data = stbi_load(ctx->imagePaths[i], &w, &h, &n, 4);
-		printf(" Drawing %s\n", ctx->imagePaths[i]);
+		if (ctx->verbose) printf(" Drawing %s\n", ctx->imagePaths[i]);
 		for (int y = 0; y < rect.h-2*d; y++) {
 			for (int x = 0; x < rect.w-2*d; x++) {
 				int output_offset = 4*(x+rect.x+d + (y+rect.y+d)*ctx->width);
@@ -212,22 +212,90 @@ static void write_atlas_texture(struct ImgPackContext *ctx) {
 				}
 			}
 		}
-		/* TODO
+
 		if (ctx->extrude > 0) {
-			int pad = ctx->padding;
+			int d = ctx->padding + ctx->extrude;
 			if (y0 == 0) {
-				printf("  Extrude %s top on %d\n", ctx->imagePaths[i], ctx->extrude);
-				for (int y = 0; y < ctx->extrude; y++) {
-					for (int x = pad; x < rect.w-2*pad; x++) {
-						int output_offset = 4*(x+rect.x+pad + (y+rect.y+pad)*ctx->width);
+				for (int y = ctx->padding; y < d; y++) {
+					for (int x = 0; x < rect.w-2*d; x++) {
+						int output_offset = 4*(x+rect.x+d + (y+rect.y)*ctx->width);
 						for (int j = 0; j < 4; j++) {
-							output_data[output_offset+j] = image_data[4*(x+x0+(0)*w)+j];
+							output_data[output_offset+j] = image_data[4*(x+x0 + (y0)*w) + j];
+						}
+					}
+				}
+			}
+			if (x0 == 0) {
+				for (int y = 0; y < rect.h-2*d; y++) {
+					for (int x = ctx->padding; x < d; x++) {
+						int output_offset = 4*(x+rect.x + (y+rect.y+d)*ctx->width);
+						for (int j = 0; j < 4; j++) {
+							output_data[output_offset+j] = image_data[4*(x0 + (y0+y)*w) + j];
+						}
+					}
+				}
+			}
+			if (y0 + rect.h - 2*d == h) {
+				for (int y = d+h; y < d+h+ctx->extrude; y++) {
+					for (int x = 0; x < rect.w-2*d; x++) {
+						int output_offset = 4*(x+rect.x+d + (y+rect.y-y0)*ctx->width);
+						for (int j = 0; j < 4; j++) {
+							output_data[output_offset+j] = image_data[4*(x0+x + (y0+rect.h-2*d-1)*w) + j];
+						}
+					}
+				}
+			}
+			if (x0 + rect.w - 2*d == w) {
+				for (int y = 0; y < rect.h-2*d; y++) {
+					for (int x = d+w; x < d+w+ctx->extrude; x++) {
+						int output_offset = 4*(x+rect.x-x0 + (y+rect.y+d)*ctx->width);
+						for (int j = 0; j < 4; j++) {
+							output_data[output_offset+j] = image_data[4*(x0+rect.w-2*d-1 + (y0+y)*w) + j];
+						}
+					}
+				}
+			}
+			if (y0 == 0 && x0 == 0) {
+				for (int y = ctx->padding; y < d; y++) {
+					for (int x = ctx->padding; x < d; x++) {
+						int output_offset = 4*(x+rect.x + (y+rect.y)*ctx->width);
+						for (int j = 0; j < 4; j++) {
+							output_data[output_offset+j] = image_data[4*(x0 + (y0)*w) + j];
+						}
+					}
+				}
+			}
+			if (y0 == 0 && x0 + rect.w - 2*d == w) {
+				for (int y = ctx->padding; y < d; y++) {
+					for (int x = d+w; x < d+w+ctx->extrude; x++) {
+						int output_offset = 4*(x+rect.x-x0 + (y+rect.y)*ctx->width);
+						for (int j = 0; j < 4; j++) {
+							output_data[output_offset+j] = image_data[4*(x0+rect.w-2*d-1 + (y0)*w) + j];
+						}
+					}
+				}
+			}
+			if (y0 + rect.h - 2*d == h && x0 == 0) {
+				for (int y = d+h; y < d+h+ctx->extrude; y++) {
+					for (int x = ctx->padding; x < d; x++) {
+						int output_offset = 4*(x+rect.x + (y+rect.y-y0)*ctx->width);
+						for (int j = 0; j < 4; j++) {
+							output_data[output_offset+j] = image_data[4*(x0 + (y0+rect.h-2*d-1)*w) + j];
+						}
+					}
+				}
+			}
+			if (y0 + rect.h - 2*d == h && x0 + rect.w - 2*d == w) {
+				for (int y = d+h; y < d+h+ctx->extrude; y++) {
+					for (int x = d+w; x < d+w+ctx->extrude; x++) {
+						int output_offset = 4*(x+rect.x + (y+rect.y-y0)*ctx->width);
+						for (int j = 0; j < 4; j++) {
+							output_data[output_offset+j] = image_data[4*(x0+rect.w-2*d-1 + (y0+rect.h-2*d-1)*w) + j];
 						}
 					}
 				}
 			}
 		}
-		*/
 		stbi_image_free(image_data);
 	}
 	stbi_write_png(ctx->outputTexturePath, ctx->width, ctx->height, 4, output_data, ctx->width*4);
@@ -268,6 +336,8 @@ int main(int argc, char *argv[]) {
 			ctx.padding = strtol(argv[++i], NULL, 10);
 		} else if (!strcmp(argv[i], "--extrude")) {
 			ctx.extrude = strtol(argv[++i], NULL, 10);
+		} else if (!strcmp(argv[i], "--verbose")) {
+			ctx.verbose = 1;
 		}
 	}
 
