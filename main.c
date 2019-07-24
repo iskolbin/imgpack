@@ -36,7 +36,7 @@ struct ImgPackContext {
 
 	char *outputTexturePath;
 	char *outputDataPath;
-	char *idPrefix;
+	char *name;
 };
 
 static void allocate_images_data(struct ImgPackContext *ctx) {
@@ -94,36 +94,35 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 	if (ctx->verbose) printf("  Added \"%s\" %dx%d(trimmed to %dx%d)\n", imgPath, width, height, maxX - minX + 1, maxY - minY + 1);
 }
 
-static int get_images_data(struct ImgPackContext *ctx, const char *dirPath) {
-	char buffer[512];
+static int get_images_data(struct ImgPackContext *ctx, const char *path) {
 	int count = 0;
 	cf_dir_t dir;
-	if (cf_dir_open(&dir, dirPath)) {
-		if (ctx->verbose) printf("Reading images data from \"%s\" directory\n", dirPath);
+	if (cf_dir_open(&dir, path)) {
+		if (ctx->verbose) printf("Reading images data from \"%s\" directory\n", path);
 		while(dir.has_next) {
-			//if (get_images_data(ctx, ent->d_name) == -1) {
-				int width, height, channels;
-				cf_file_t file;
-				cf_read_file (&dir, &file);
-				if (ctx->verbose) printf("  Reading %s\n", file.name);
-				strcpy(buffer, dirPath);
-				strcat(buffer, "/");
-				strcat(buffer, file.name);
-				stbi_uc *data = stbi_load(buffer, &width, &height, &channels, 4);
-				if (data) {
-					add_image_data(ctx, data, buffer, width, height);
-					count++;
-					stbi_image_free(data);
+			cf_file_t file;
+			cf_read_file(&dir, &file);
+			if (file.is_reg) {
+				if (file.is_dir) {
+					if (ctx->verbose) printf("  Traverse %s\n", file.name);
+					count += get_images_data(ctx, file.path);
+				} else {
+					if (ctx->verbose) printf("  Reading %s\n", file.name);
+					int width, height, channels;
+					stbi_uc *data = stbi_load(file.path, &width, &height, &channels, 4);
+					if (data) {
+						add_image_data(ctx, data, file.path, width, height);
+						count++;
+						stbi_image_free(data);
+					}
 				}
-				cf_dir_next(&dir);
-			//}
+			}
+			cf_dir_next(&dir);
 		}
 		cf_dir_close(&dir);
-		if (ctx->verbose) printf("From %s added %d images\n", dirPath, count);
-		return count;
-	} else {
-		return -1;
+		if (ctx->verbose) printf("From %s added %d images\n", path, count);
 	}
+	return count;
 }
 
 static unsigned long upper_power_of_two(unsigned long v) {
@@ -162,7 +161,7 @@ static void write_atlas_data(struct ImgPackContext *ctx) {
 	FILE *output_file = fopen(ctx->outputDataPath, "w+");
 	if (output_file) {
 		if (ctx->verbose) printf("Writing description data to \"%s\"\n", ctx->outputDataPath);
-		fprintf(output_file, "enum %sIds = {\n", ctx->idPrefix);
+		fprintf(output_file, "enum %sIds = {\n", ctx->name);
 		for (int i = 0; i < ctx->imagesUsed; i++) {
 			char *image_path = ctx->imagePaths[i];
 			int point_pos, start_pos;
@@ -176,16 +175,16 @@ static void write_atlas_data(struct ImgPackContext *ctx) {
 				else buffer[j] = ch;
 			}
 			buffer[j] = '\0';
-			fprintf(output_file, "\t%s%s = %d,\n", ctx->idPrefix, buffer, i);
+			fprintf(output_file, "\t%s%s = %d,\n", ctx->name, buffer, i);
 		}
 		fprintf(output_file, "};\n\n");
-		fprintf(output_file, "static const char * %sPaths[%d] = {\n", ctx->idPrefix, ctx->imagesUsed);
+		fprintf(output_file, "static const char * %sPaths[%d] = {\n", ctx->name, ctx->imagesUsed);
 		for (int i = 0; i < ctx->imagesUsed; i++) {
 			fprintf(output_file, "\t\"%s\",\n", ctx->imagePaths[i]);
 		}
 		fprintf(output_file, "};\n\n");
 
-		fprintf(output_file, "static stbrp_rect %sRects[%d] = {\n", ctx->idPrefix, ctx->imagesUsed);
+		fprintf(output_file, "static stbrp_rect %sRects[%d] = {\n", ctx->name, ctx->imagesUsed);
 		for (int i = 0; i < ctx->imagesUsed; i++) {
 			fprintf(output_file, "\t{%d, %d, %d, %d, %d},\n", i, ctx->imageRects[i].x, ctx->imageRects[i].y, ctx->imageRects[i].w, ctx->imageRects[i].h);
 		}
@@ -323,7 +322,7 @@ int main(int argc, char *argv[]) {
 	char *imagesPath = argv[argc-1];
 	for (int i = 0; i < argc; i++) {
 		if (!strcmp(argv[i], "--name")) {
-			ctx.idPrefix = argv[++i];
+			ctx.name = argv[++i];
 		} else if (!strcmp(argv[i], "--data")) {
 			ctx.outputDataPath = argv[++i];
 		} else if (!strcmp(argv[i], "--texture")) {
