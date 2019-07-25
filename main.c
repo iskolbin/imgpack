@@ -15,9 +15,9 @@
 #include "cute_files.h"
 
 struct ImgPackContext {
-	int (*formatter)(struct ImgPackContext *ctx, FILE *output_file);
-	int forceSquare;
+	int (*formatter)(struct ImgPackContext *ctx, FILE *output_file, int argc, char *argv[]);
 	int forcePOT;
+	int forceSquared;
 	int trim;
 	int allowMultipack;
 	int maxWidth;
@@ -27,13 +27,11 @@ struct ImgPackContext {
 	int verbose;
 
 	char **imagePaths;
-	int *imageOffsetX;
-	int *imageOffsetY;
-	int *imageSourceW;
-	int *imageSourceH;
-	struct stbrp_rect *imageRects;
-	int imagesUsed;
-	int imagesAllocated;
+	struct stbrp_rect *sourceRects;
+	struct stbrp_rect *packingRects;
+	int size;
+	int allocated;
+
 	int width;
 	int height;
 	int scaleNumerator;
@@ -41,11 +39,10 @@ struct ImgPackContext {
 
 	char *outputImagePath;
 	char *outputDataPath;
-	char *name;
 };
 
 static int is_image_rotated(struct ImgPackContext *ctx, int id) {
-	if (id >= 0 && id < ctx->imagesUsed) {
+	if (id >= 0 && id < ctx->size) {
 		return 0;
 	} else {
 		return -1;
@@ -53,9 +50,9 @@ static int is_image_rotated(struct ImgPackContext *ctx, int id) {
 }
 
 static int is_image_trimmed(struct ImgPackContext *ctx, int id) {
-	if (id >= 0 && id < ctx->imagesUsed) {
+	if (id >= 0 && id < ctx->size) {
 		int d = ctx->padding + ctx->extrude;
-		return ctx->imageOffsetX[id] != 0 || ctx->imageOffsetY[id] != 0 || ctx->imageSourceW[id] != ctx->imageRects[id].w-2*d || ctx->imageSourceH[id] != ctx->imageRects[id].h-2*d; 
+		return ctx->sourceRects[id].x != 0 || ctx->sourceRects[id].y != 0 || ctx->sourceRects[id].w != ctx->packingRects[id].w-2*d || ctx->sourceRects[id].h != ctx->packingRects[id].h-2*d; 
 	} else {
 		return -1;
 	}
@@ -67,12 +64,12 @@ static const char *get_output_image_format(struct ImgPackContext *ctx) {
 
 static struct stbrp_rect get_frame_rect(struct ImgPackContext *ctx, int id) {
 	struct stbrp_rect frame = {0};
-	if (id >= 0 && id < ctx->imagesUsed) {
+	if (id >= 0 && id < ctx->size) {
 		int d = ctx->padding + ctx->extrude;
-		frame.x = ctx->imageRects[id].x + d;
-		frame.y = ctx->imageRects[id].y + d;
-		frame.w = ctx->imageRects[id].w - 2*d;
-		frame.h = ctx->imageRects[id].h - 2*d;
+		frame.x = ctx->packingRects[id].x + d;
+		frame.y = ctx->packingRects[id].y + d;
+		frame.w = ctx->packingRects[id].w - 2*d;
+		frame.h = ctx->packingRects[id].h - 2*d;
 	}
 	return frame;
 }
@@ -92,25 +89,21 @@ static int parse_format(struct ImgPackContext *ctx, const char *s) {
 }
 
 static void allocate_images_data(struct ImgPackContext *ctx) {
-	int next_size = ctx->imagesAllocated * 2;
+	int next_size = ctx->allocated * 2;
 	if (next_size == 0) next_size = 16;
 	ctx->imagePaths = realloc(ctx->imagePaths, next_size * sizeof(*ctx->imagePaths));
-	ctx->imageRects = realloc(ctx->imageRects, next_size * sizeof(*ctx->imageRects));
-	ctx->imageOffsetX = realloc(ctx->imageOffsetX, next_size * sizeof(*ctx->imageOffsetX));
-	ctx->imageOffsetY = realloc(ctx->imageOffsetY, next_size * sizeof(*ctx->imageOffsetY));
-	ctx->imageSourceW = realloc(ctx->imageSourceW, next_size * sizeof(*ctx->imageSourceW));
-	ctx->imageSourceH = realloc(ctx->imageSourceH, next_size * sizeof(*ctx->imageSourceH));
-	ctx->imagesAllocated = next_size;
+	ctx->packingRects = realloc(ctx->packingRects, next_size * sizeof(*ctx->packingRects));
+	ctx->sourceRects = realloc(ctx->sourceRects, next_size * sizeof(*ctx->sourceRects));
+	ctx->allocated = next_size;
 }
 
-static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char *imgPath, int width, int height) {
-	int id = ctx->imagesUsed;
-	while (id >= ctx->imagesAllocated) {
+static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char *img_path, int width, int height) {
+	int id = ctx->size;
+	while (id >= ctx->allocated) {
 		allocate_images_data(ctx);
 	}
-	ctx->imagesUsed++;
-	ctx->imageSourceW[id] = width;
-	ctx->imageSourceH[id] = height;
+	ctx->size++;
+
 	int minY = 0, minX = 0, maxY = height-1, maxX = width-1;
 	if (ctx->trim) {
 		for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) if (data[4*(y*width+x)+3] != 0) {
@@ -133,21 +126,18 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 			x = -1;
 			break;
 		}
-		ctx->imageOffsetX[id] = minX;
-		ctx->imageOffsetY[id] = minY;
-	} else {
-		ctx->imageOffsetX[id] = 0;
-		ctx->imageOffsetY[id] = 0;
 	}
-	char *path = malloc(strlen(imgPath)+1);
-	strcpy(path, imgPath);
+	ctx->sourceRects[id] = (stbrp_rect) {.x = minX, .y = minY, .w = width, .h = height};
+
+	char *path = malloc(strlen(img_path)+1);
+	strcpy(path, img_path);
 	ctx->imagePaths[id] = path;
-	ctx->imageRects[id] = (stbrp_rect) {
+	ctx->packingRects[id] = (stbrp_rect) {
 		.id = id,
 		.w = maxX - minX + 1 + 2*(ctx->padding + ctx->extrude),
 		.h = maxY - minY + 1 + 2*(ctx->padding + ctx->extrude),
 	};
-	if (ctx->verbose) printf("  Added \"%s\" %dx%d(trimmed to %dx%d)\n", imgPath, width, height, maxX - minX + 1, maxY - minY + 1);
+	if (ctx->verbose) printf("  Added \"%s\" %dx%d(trimmed to %dx%d)\n", path, width, height, maxX - minX + 1, maxY - minY + 1);
 }
 
 static int get_images_data(struct ImgPackContext *ctx, const char *path) {
@@ -195,31 +185,34 @@ static unsigned long upper_power_of_two(unsigned long v) {
 static void pack_images(struct ImgPackContext *ctx) {
 	int occupied_area = 0;
 	int side_add = ctx->padding + ctx->extrude;
-	for (int i = 0; i < ctx->imagesUsed; i++) {
-		occupied_area += ((side_add+ctx->imageRects[i].w)*(side_add+ctx->imageRects[i].h));
+	for (int i = 0; i < ctx->size; i++) {
+		occupied_area += ((side_add+ctx->packingRects[i].w)*(side_add+ctx->packingRects[i].h));
 	}
 	if (ctx->verbose) printf("Occupied area is %d\n", occupied_area);
 	int assumed_side_size = (int)(1.1*sqrt((double)occupied_area));
-	stbrp_node *nodes = malloc(sizeof(*nodes) * ctx->imagesUsed);
+	stbrp_node *nodes = malloc(sizeof(*nodes) * ctx->size);
 	if (ctx->forcePOT) {
 		assumed_side_size = upper_power_of_two(assumed_side_size);
 	}
 	ctx->width = assumed_side_size;
 	ctx->height = assumed_side_size;
 	stbrp_context rp_ctx = {0};
-	if (ctx->verbose) printf("Trying to pack %d images into %dx%d\n", ctx->imagesUsed, assumed_side_size, assumed_side_size);
-	stbrp_init_target(&rp_ctx, assumed_side_size, assumed_side_size, nodes, ctx->imagesUsed);
-	stbrp_pack_rects(&rp_ctx, ctx->imageRects, ctx->imagesUsed);
+	if (ctx->verbose) printf("Trying to pack %d images into %dx%d\n", ctx->size, assumed_side_size, assumed_side_size);
+	stbrp_init_target(&rp_ctx, assumed_side_size, assumed_side_size, nodes, ctx->size);
+	stbrp_pack_rects(&rp_ctx, ctx->packingRects, ctx->size);
 	free(nodes);
 }
 
-static int write_atlas_data(struct ImgPackContext *ctx) {
-	FILE *output_file = fopen(ctx->outputDataPath, "w+");
+static int write_atlas_data(struct ImgPackContext *ctx, int argc, char *argv[]) {
+	FILE *output_file = stdout;
+	if (ctx->outputDataPath) {
+		output_file = fopen(ctx->outputDataPath, "w+");
+	}
 	int status = 1;
 	if (output_file) {
 		if (ctx->verbose) printf("Writing description data to \"%s\"\n", ctx->outputDataPath);
-		status = ctx->formatter(ctx, output_file);
-		fclose(output_file);
+		status = ctx->formatter(ctx, output_file, argc, argv);
+		if (output_file != stdout) fclose(output_file);
 	} else {
 		printf("Cannot open for writing \"%s\"", ctx->outputDataPath);
 	}
@@ -229,9 +222,9 @@ static int write_atlas_data(struct ImgPackContext *ctx) {
 static int write_atlas_image(struct ImgPackContext *ctx) {
 	unsigned char *output_data = malloc(4 * ctx->width * ctx->height);
 	if (ctx->verbose) printf("Drawing atlas image to \"%s\"\n", ctx->outputImagePath);
-	for (int i = 0; i < ctx->imagesUsed; i++) {
-		struct stbrp_rect rect = ctx->imageRects[i];
-		int x0 = ctx->imageOffsetX[i], y0 = ctx->imageOffsetY[i];
+	for (int i = 0; i < ctx->size; i++) {
+		struct stbrp_rect rect = ctx->packingRects[i];
+		int x0 = ctx->sourceRects[i].x, y0 = ctx->sourceRects[i].y;
 		int d = ctx->padding + ctx->extrude;
 		int w, h, n;
 		stbi_uc *image_data = stbi_load(ctx->imagePaths[i], &w, &h, &n, 4);
@@ -336,37 +329,31 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 }
 
 static void clear_context(struct ImgPackContext *ctx) {
-	for (int i = 0; i < ctx->imagesUsed; i++) {
+	for (int i = 0; i < ctx->size; i++) {
 		free(ctx->imagePaths[i]);
 	};
 	free(ctx->imagePaths);
-	free(ctx->imageRects);
-	free(ctx->imageOffsetX);
-	free(ctx->imageOffsetY);
-	free(ctx->imageSourceW);
-	free(ctx->imageSourceH);
+	free(ctx->packingRects);
+	free(ctx->sourceRects);
 	ctx->imagePaths = NULL;
-	ctx->imageRects = NULL;
-	ctx->imageOffsetX = NULL;
-	ctx->imageOffsetY = NULL;
-	ctx->imageSourceW = NULL;
-	ctx->imageSourceH = NULL;
-	ctx->imagesUsed = 0;
-	ctx->imagesAllocated = 0;
+	ctx->packingRects = NULL;
+	ctx->sourceRects = NULL;
+	ctx->size = 0;
+	ctx->allocated = 0;
 }
 
 int main(int argc, char *argv[]) {
 	struct ImgPackContext ctx = {.scaleNumerator = 1, .scaleDenominator = 1};
 	char *imagesPath = argv[argc-1];
 	for (int i = 0; i < argc; i++) {
-		if (!strcmp(argv[i], "--name")) {
-			ctx.name = argv[++i];
-		} else if (!strcmp(argv[i], "--data")) {
+		if (!strcmp(argv[i], "--data")) {
 			ctx.outputDataPath = argv[++i];
 		} else if (!strcmp(argv[i], "--image")) {
 			ctx.outputImagePath = argv[++i];
 		} else if (!strcmp(argv[i], "--force-pot")) {
 			ctx.forcePOT = 1;
+		} else if (!strcmp(argv[i], "--force-squared")) {
+			ctx.forceSquared = 1;
 		} else if (!strcmp(argv[i], "--trim")) {
 			ctx.trim = 1;
 		} else if (!strcmp(argv[i], "--padding")) {
@@ -391,7 +378,7 @@ int main(int argc, char *argv[]) {
 	}
 	get_images_data(&ctx, imagesPath);
 	pack_images(&ctx);
-	if (ctx.outputDataPath && write_atlas_data(&ctx)) return 1;
+	if (write_atlas_data(&ctx, argc, argv)) return 1;
 	if (ctx.outputImagePath && write_atlas_image(&ctx)) return 1;
 	clear_context(&ctx);
 	return 0;
