@@ -27,8 +27,8 @@ struct ImgPackContext {
 	int (*formatter)(struct ImgPackContext *ctx, FILE *output_file, int argc, char *argv[]);
 	int forcePOT;
 	int forceSquared;
-	int trim;
 	int allowMultipack;
+	int trimThreshold;
 	int maxWidth;
 	int maxHeight;
 	int padding;
@@ -114,23 +114,23 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 	ctx->size++;
 
 	int minY = 0, minX = 0, maxY = height-1, maxX = width-1;
-	if (ctx->trim) {
-		for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) if (data[4*(y*width+x)+3] != 0) {
+	if (ctx->trimThreshold >= 0) {
+		for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) if (data[4*(y*width+x)+3] > ctx->trimThreshold) {
 			minY = y;
 			y = height;
 			break;
 		}
-		for (int y = height-1; y >= 0; y--) for (int x = 0; x < width; x++) if (data[4*(y*width+x)+3] != 0) {
+		for (int y = height-1; y >= 0; y--) for (int x = 0; x < width; x++) if (data[4*(y*width+x)+3] > ctx->trimThreshold) {
 			maxY = y;
 			y = -1;
 			break;
 		}
-		for (int x = 0; x < width; x++) for (int y = 0; y < height; y++) if (data[4*(y*width+x)+3] != 0) {
+		for (int x = 0; x < width; x++) for (int y = 0; y < height; y++) if (data[4*(y*width+x)+3] > ctx->trimThreshold) {
 			minX = x;
 			x = width;
 			break;
 		}
-		for (int x = width-1; x >= 0; x--) for (int y = 0; y < height; y++) if (data[4*(y*width+x)+3] != 0) {
+		for (int x = width-1; x >= 0; x--) for (int y = 0; y < height; y++) if (data[4*(y*width+x)+3] > ctx->trimThreshold) {
 			maxX = x;
 			x = -1;
 			break;
@@ -352,7 +352,11 @@ static void clear_context(struct ImgPackContext *ctx) {
 }
 
 int main(int argc, char *argv[]) {
-	struct ImgPackContext ctx = {.scaleNumerator = 1, .scaleDenominator = 1};
+	struct ImgPackContext ctx = {
+		.scaleNumerator = 1,
+		.scaleDenominator = 1,
+		.trimThreshold = -1,
+	};
 	char *imagesPath = argv[argc-1];
 	for (int i = 0; i < argc; i++) {
 		if (!strcmp(argv[i], "--data")) {
@@ -364,7 +368,7 @@ int main(int argc, char *argv[]) {
 		} else if (!strcmp(argv[i], "--force-squared")) {
 			ctx.forceSquared = 1;
 		} else if (!strcmp(argv[i], "--trim")) {
-			ctx.trim = 1;
+			ctx.trimThreshold = strtol(argv[++i], NULL, 10);
 		} else if (!strcmp(argv[i], "--padding")) {
 			ctx.padding = strtol(argv[++i], NULL, 10);
 		} else if (!strcmp(argv[i], "--extrude")) {

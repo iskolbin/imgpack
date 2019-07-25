@@ -26,10 +26,10 @@ where options are:
 |------------|--------|------------
 | --data     | string | output file path, if ommited `stdout` is used
 | --image    | string | (required) output image path
-| --trim     |        | if specified trims input images with transparent borders
+| --format   | string | (required) output atlas data format
+| --trim     | int    | alpha threshold for trimming image with transparent border, should be 0-255
 | --padding  | int    | adds transparent padding
 | --exturde  | int    | adds copied pixels on image borders, which helps whit texture bleeding
-| --format   | string | output atlas data format
 | --verbose  |        | print debug messages during the packing process
 
 
@@ -86,7 +86,7 @@ Outputs JSON formatted like TexturePacker does
 Todos
 -----
 
-* Choosing threshold for trim
+* Better output size guessing
 * Multipacking
 * Limits for max width and max height for output texture
 * Not POT output texture
