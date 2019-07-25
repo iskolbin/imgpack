@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.6
+ * ImgPack -- simple texture packer v0.6.1
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -95,12 +95,14 @@ static struct stbrp_rect get_frame_rect(struct ImgPackContext *ctx, int id) {
 }
 
 #include "formatters/C.h"
+#include "formatters/CSV.h"
 #include "formatters/JSON_ARRAY.h"
 #include "formatters/JSON_HASH.h"
 #include "formatters/RAYLIB.h"
 
 static int parse_data_format(struct ImgPackContext *ctx, const char *s) {
 	if (!strcmp(s, "C")) ctx->formatter = imgpack_formatter_C;
+	else if (!strcmp(s, "CSV")) ctx->formatter = imgpack_formatter_CSV;
 	else if (!strcmp(s, "JSON_ARRAY")) ctx->formatter = imgpack_formatter_JSON_ARRAY;
 	else if (!strcmp(s, "JSON_HASH")) ctx->formatter = imgpack_formatter_JSON_HASH;
 	else if (!strcmp(s, "RAYLIB")) ctx->formatter = imgpack_formatter_RAYLIB;
