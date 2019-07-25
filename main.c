@@ -381,9 +381,8 @@ int main(int argc, char *argv[]) {
 	char *format_data = "C";
 	char *format_color = "RGBA8888";
 	IA_BEGIN(argc, argv, "--help", "-?", "ImgPack texture packer v0.6\n"
-		"by Ilya Kolbin (iskolbin@gmail.com)\n\n"
-		"Usage:\n\n"
-		"imgpack <OPTIONS> <images folder>\n\n"
+		"Copyright 2019 Ilya Kolbin <iskolbin@gmail.com>\n\n"
+		"Usage : imgpack <OPTIONS> <images folder>\n\n"
 		" Key       |    | Value  | Description\n"
 		"-----------+----+--------+----------------------------------------------\n"
 		" --data    | -d | string | output file path, if ommited `stdout` is used\n"
