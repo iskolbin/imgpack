@@ -3,7 +3,7 @@
 Imgpack
 =======
 
-Simple texture atlas generator. Takes folder with images and outputs texture atlas + data file. Written in pure C without external dependencies.
+Simple texture atlas generator. Takes folder with images and outputs texture atlas + data file. Written in pure C without external dependencies. For packing uses `stb_rect_pack` which implements `Skyline` bin packing algorithm. For crossplatform filesystem manipulation uses `cute_files`.
 
 Quick start
 -----------
