@@ -3,7 +3,7 @@
 Imgpack
 =======
 
-Simple texture packer generator. Takes folder with images and outputs texture atlas + data file. Written in pure C without external dependencies.
+Simple texture atlas generator. Takes folder with images and outputs texture atlas + data file. Written in pure C without external dependencies.
 
 Quick start
 -----------
