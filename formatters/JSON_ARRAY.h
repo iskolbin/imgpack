@@ -1,4 +1,4 @@
-static int imgpack_formatter_JSON_ARRAY(struct ImgPackContext *ctx, FILE *f, int argc, char *argv[]) {
+static int imgpack_formatter_JSON_ARRAY(struct ImgPackContext *ctx, FILE *f) {
 	fprintf(f, "{\"frames\": [\n\n");
 	for (int i = 0; i < ctx->size; i++) {
 		struct stbrp_rect frame = get_frame_rect(ctx, i);

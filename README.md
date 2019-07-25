@@ -25,11 +25,11 @@ where options are:
 | Key        | Value  | Description
 |------------|--------|------------
 | --data     | string | output file path, if ommited `stdout` is used
-| --image    | string | (required) output image path
-| --format   | string | (required) output atlas data format
+| --image    | string | output image path, if not specified image will not be created
+| --format   | string | output atlas data format, if not specified "C" format will be used
 | --trim     | int    | alpha threshold for trimming image with transparent border, should be 0-255
 | --padding  | int    | adds transparent padding
-| --exturde  | int    | adds copied pixels on image borders, which helps whit texture bleeding
+| --exturde  | int    | adds copied pixels on image borders, which helps with texture bleeding
 | --verbose  |        | print debug messages during the packing process
 
 

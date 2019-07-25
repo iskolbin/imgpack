@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.5
+ * ImgPack -- simple texture packer v0.6
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -10,6 +10,8 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <math.h>
+
+#include "isl_args.h"
 
 #define STB_IMAGE_IMPLEMENTATION 
 #include "stb_image.h"
@@ -23,8 +25,13 @@
 #define CUTE_FILES_IMPLEMENTATION
 #include "cute_files.h"
 
+enum ImgPackColorFormat {
+	IMGPACK_RGBA8888,
+};
+
 struct ImgPackContext {
-	int (*formatter)(struct ImgPackContext *ctx, FILE *output_file, int argc, char *argv[]);
+	enum ImgPackColorFormat colorFormat;
+	int (*formatter)(struct ImgPackContext *ctx, FILE *output_file);
 	int forcePOT;
 	int forceSquared;
 	int allowMultipack;
@@ -48,6 +55,10 @@ struct ImgPackContext {
 
 	char *outputImagePath;
 	char *outputDataPath;
+
+	int argc;
+	char **argv;
+	char *colorFormatString;
 };
 
 static int is_image_rotated(struct ImgPackContext *ctx, int id) {
@@ -68,7 +79,7 @@ static int is_image_trimmed(struct ImgPackContext *ctx, int id) {
 }
 
 static const char *get_output_image_format(struct ImgPackContext *ctx) {
-	return "RGBA8888";
+	return ctx->colorFormatString;
 }
 
 static struct stbrp_rect get_frame_rect(struct ImgPackContext *ctx, int id) {
@@ -88,12 +99,19 @@ static struct stbrp_rect get_frame_rect(struct ImgPackContext *ctx, int id) {
 #include "formatters/JSON_HASH.h"
 #include "formatters/RAYLIB.h"
 
-static int parse_format(struct ImgPackContext *ctx, const char *s) {
+static int parse_data_format(struct ImgPackContext *ctx, const char *s) {
 	if (!strcmp(s, "C")) ctx->formatter = imgpack_formatter_C;
 	else if (!strcmp(s, "JSON_ARRAY")) ctx->formatter = imgpack_formatter_JSON_ARRAY;
 	else if (!strcmp(s, "JSON_HASH")) ctx->formatter = imgpack_formatter_JSON_HASH;
 	else if (!strcmp(s, "RAYLIB")) ctx->formatter = imgpack_formatter_RAYLIB;
 	else return 1;
+	return 0;
+}
+
+static int parse_data_color(struct ImgPackContext *ctx, const char *s) {
+	if (!strcmp(s, "RGBA8888")) ctx->colorFormat = IMGPACK_RGBA8888;
+	else return 1;
+	ctx->colorFormatString = (char *)s;
 	return 0;
 }
 
@@ -212,7 +230,7 @@ static void pack_images(struct ImgPackContext *ctx) {
 	free(nodes);
 }
 
-static int write_atlas_data(struct ImgPackContext *ctx, int argc, char *argv[]) {
+static int write_atlas_data(struct ImgPackContext *ctx) {
 	FILE *output_file = stdout;
 	if (ctx->outputDataPath) {
 		output_file = fopen(ctx->outputDataPath, "w+");
@@ -220,7 +238,7 @@ static int write_atlas_data(struct ImgPackContext *ctx, int argc, char *argv[]) 
 	int status = 1;
 	if (output_file) {
 		if (ctx->verbose) printf("Writing description data to \"%s\"\n", ctx->outputDataPath);
-		status = ctx->formatter(ctx, output_file, argc, argv);
+		status = ctx->formatter(ctx, output_file);
 		if (output_file != stdout) fclose(output_file);
 	} else {
 		printf("Cannot open for writing \"%s\"", ctx->outputDataPath);
@@ -356,42 +374,56 @@ int main(int argc, char *argv[]) {
 		.scaleNumerator = 1,
 		.scaleDenominator = 1,
 		.trimThreshold = -1,
+		.argc = argc,
+		.argv = argv,
 	};
 	char *imagesPath = argv[argc-1];
-	for (int i = 0; i < argc; i++) {
-		if (!strcmp(argv[i], "--data")) {
-			ctx.outputDataPath = argv[++i];
-		} else if (!strcmp(argv[i], "--image")) {
-			ctx.outputImagePath = argv[++i];
-		} else if (!strcmp(argv[i], "--force-pot")) {
-			ctx.forcePOT = 1;
-		} else if (!strcmp(argv[i], "--force-squared")) {
-			ctx.forceSquared = 1;
-		} else if (!strcmp(argv[i], "--trim")) {
-			ctx.trimThreshold = strtol(argv[++i], NULL, 10);
-		} else if (!strcmp(argv[i], "--padding")) {
-			ctx.padding = strtol(argv[++i], NULL, 10);
-		} else if (!strcmp(argv[i], "--extrude")) {
-			ctx.extrude = strtol(argv[++i], NULL, 10);
-		} else if (!strcmp(argv[i], "--verbose")) {
-			ctx.verbose = 1;
-		} else if (!strcmp(argv[i], "--format")) {
-			if (!parse_format(&ctx, argv[++i])) {
-				if (ctx.verbose) printf("Using format %s", argv[i]);
-			} else {
-				printf("Bad format \"%s\"\n", argv[i]);
-				return 1;
-			}
-		}
-	}
+	char *format_data = "C";
+	char *format_color = "RGBA8888";
+	IA_BEGIN(argc, argv, "--help", "-?", "ImgPack texture packer v0.6\n"
+		"by Ilya Kolbin (iskolbin@gmail.com)\n\n"
+		"Usage:\n\n"
+		"imgpack <OPTIONS> <images folder>\n\n"
+		" Key       |    | Value  | Description\n"
+		"-----------+----+--------+----------------------------------------------\n"
+		" --data    | -d | string | output file path, if ommited `stdout` is used\n"
+		" --image   | -i | string | output image path\n"
+		" --format  | -f | string | output atlas data format\n"
+		" --trim    | -t | int    | alpha threshold for trimming image with transparent border, should be 0-255\n"
+		" --padding | -p | int    | adds transparent padding\n"
+		" --exturde | -e | int    | adds copied pixels on image borders, which helps with texture bleeding\n"
+		" --verbose | -v |        | print debug messages during the packing process\n"
+		" --help    | -? |        | prints this memo\n\n")
+		IA_STR("--data", "-d", ctx.outputDataPath)
+		IA_STR("--image", "-i", ctx.outputImagePath)
+		IA_FLAG("--force-pot", "-2", ctx.forcePOT)
+		IA_FLAG("--force-squared", "-sq", ctx.forceSquared)
+		IA_FLAG("--multipack", "-m", ctx.allowMultipack)
+		IA_INT("--trim", "-t", ctx.trimThreshold)
+		IA_INT("--padding", "-p", ctx.padding)
+		IA_INT("--extrude", "-e", ctx.extrude)
+		IA_FLAG("--verbose", "-v", ctx.verbose)
+		IA_STR("--format", "-f", format_data) 
+		IA_STR("--color", "-c", format_data) 
+	IA_END
 
-	if (!ctx.formatter) {
-		printf("Specify format\n");
+	if (!parse_data_format(&ctx, format_data)) {
+		if (ctx.verbose) printf("Using data format %s", format_data);
+	} else {
+		printf("Bad data format \"%s\"\n", format_data);
 		return 1;
 	}
+
+	if (!parse_data_color(&ctx, format_color)) {
+		if (ctx.verbose) printf("Using color format %s", format_color);
+	} else {
+		printf("Bad color format \"%s\"\n", format_color);
+		return 1;
+	}
+
 	get_images_data(&ctx, imagesPath);
 	pack_images(&ctx);
-	if (write_atlas_data(&ctx, argc, argv)) return 1;
+	if (write_atlas_data(&ctx)) return 1;
 	if (ctx.outputImagePath && write_atlas_image(&ctx)) return 1;
 	clear_context(&ctx);
 	return 0;

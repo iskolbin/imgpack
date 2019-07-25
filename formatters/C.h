@@ -1,4 +1,4 @@
-static int imgpack_formatter_C(struct ImgPackContext *ctx, FILE *f, int argc, char *argv[]) {
+static int imgpack_formatter_C(struct ImgPackContext *ctx, FILE *f) {
 	char *path = ctx->outputImagePath;
 	char name[128];
 	for (int i = 0; path[i] && i < 127; i++) {
