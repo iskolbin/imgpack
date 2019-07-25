@@ -268,7 +268,6 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 		}
 
 		if (ctx->extrude > 0) {
-			int d = ctx->padding + ctx->extrude;
 			if (y0 == 0) {
 				for (int y = ctx->padding; y < d; y++) {
 					for (int x = 0; x < rect.w-2*d; x++) {
