@@ -1,12 +1,20 @@
+[![ko-fi](https://www.ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/V7V0VP6A)
+
 Imgpack
 =======
 
-Simple texture packer generator.
+Simple texture packer generator. Takes folder with images and outputs texture atlas + data file. Written in pure C without external dependencies.
 
 Quick start
 -----------
 
-Clone the repo and do `make`. This will create `imgpack` command-line tool which can be used like:
+To build you will need `C99` compiler and optionally `Make`. All dependencies are packed in the repo, so just clone or download zip the repo and do:
+
+```
+make all
+```
+
+This will create `imgpack` command-line tool which can be used like:
 
 ```
 imgpack <OPTIONS> <folder with images>
@@ -73,3 +81,23 @@ Outputs JSON formatted like TexturePacker does
 ### JSON\_HASH
 
 Outputs JSON formatted like TexturePacker does
+
+
+Todos
+-----
+
+* Choosing threshold for trim
+* Multipacking
+* Limits for max width and max height for output texture
+* Not POT output texture
+* Not square output texture
+* Scaling
+* Compressed output texture (DXT5?)
+* Detecting same images
+* Memory allocation checks
+* Input error checking
+
+Donation
+--------
+
+ImgPack is free and open source project and if you like the project consider a [donation](https://ko-fi.com/V7V0VP6A).
