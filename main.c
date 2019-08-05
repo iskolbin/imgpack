@@ -45,6 +45,7 @@ struct ImgPackContext {
 	char **imagePaths;
 	struct stbrp_rect *sourceRects;
 	struct stbrp_rect *packingRects;
+	stbi_uc **images;
 	int size;
 	int allocated;
 
@@ -123,6 +124,7 @@ static void allocate_images_data(struct ImgPackContext *ctx) {
 	ctx->imagePaths = realloc(ctx->imagePaths, next_size * sizeof(*ctx->imagePaths));
 	ctx->packingRects = realloc(ctx->packingRects, next_size * sizeof(*ctx->packingRects));
 	ctx->sourceRects = realloc(ctx->sourceRects, next_size * sizeof(*ctx->sourceRects));
+	ctx->images = realloc(ctx->images, next_size * sizeof(*ctx->images));
 	ctx->allocated = next_size;
 }
 
@@ -131,6 +133,7 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 	while (id >= ctx->allocated) {
 		allocate_images_data(ctx);
 	}
+	ctx->images[id] = data;
 	ctx->size++;
 
 	int minY = 0, minX = 0, maxY = height-1, maxX = width-1;
@@ -187,7 +190,6 @@ static int get_images_data(struct ImgPackContext *ctx, const char *path) {
 				if (data) {
 					add_image_data(ctx, data, file.path, width, height);
 					count++;
-					stbi_image_free(data);
 				}
 			}
 			cf_dir_next(&dir);
@@ -257,8 +259,10 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 		struct stbrp_rect rect = ctx->packingRects[i];
 		int x0 = ctx->sourceRects[i].x, y0 = ctx->sourceRects[i].y;
 		int d = ctx->padding + ctx->extrude;
-		int w, h, n;
-		stbi_uc *image_data = stbi_load(ctx->imagePaths[i], &w, &h, &n, 4);
+		int w = ctx->sourceRects[i].w, h = ctx->sourceRects[i].h;
+		//int w, h, n;
+		stbi_uc *image_data = ctx->images[i];
+		//stbi_load(ctx->imagePaths[i], &w, &h, &n, 4);
 		if (ctx->verbose) printf(" Drawing %s\n", ctx->imagePaths[i]);
 		for (int y = 0; y < rect.h-2*d; y++) {
 			for (int x = 0; x < rect.w-2*d; x++) {
@@ -351,7 +355,7 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 				}
 			}
 		}
-		stbi_image_free(image_data);
+		//stbi_image_free(image_data);
 	}
 	stbi_write_png(ctx->outputImagePath, ctx->width, ctx->height, 4, output_data, ctx->width*4);
 	free(output_data);
@@ -361,13 +365,16 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 static void clear_context(struct ImgPackContext *ctx) {
 	for (int i = 0; i < ctx->size; i++) {
 		free(ctx->imagePaths[i]);
+		stbi_image_free(ctx->images[i]);
 	};
 	free(ctx->imagePaths);
 	free(ctx->packingRects);
 	free(ctx->sourceRects);
+	free(ctx->images);
 	ctx->imagePaths = NULL;
 	ctx->packingRects = NULL;
 	ctx->sourceRects = NULL;
+	ctx->images = NULL;
 	ctx->size = 0;
 	ctx->allocated = 0;
 }
