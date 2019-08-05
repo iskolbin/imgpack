@@ -476,7 +476,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (write_atlas_data(&ctx)) return 1;
-	if (ctx.outputImagePath && write_atlas_image(&ctx)) return 1;
+	if (write_atlas_image(&ctx)) return 1;
 	clear_context(&ctx);
 	return 0;
 }
