@@ -244,7 +244,7 @@ static int write_atlas_data(struct ImgPackContext *ctx) {
 	if (output_file) {
 		if (ctx->verbose) printf("Writing description data to \"%s\"\n", ctx->outputDataPath ? ctx->outputDataPath : "stdout");
 		status = ctx->formatter(ctx, output_file);
-		printf("Written\n");
+		if (ctx->verbose) printf("Written\n");
 		if (output_file != stdout) fclose(output_file);
 	} else {
 		printf("Cannot open for writing \"%s\"", ctx->outputDataPath);
@@ -260,9 +260,7 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 		int x0 = ctx->sourceRects[i].x, y0 = ctx->sourceRects[i].y;
 		int d = ctx->padding + ctx->extrude;
 		int w = ctx->sourceRects[i].w, h = ctx->sourceRects[i].h;
-		//int w, h, n;
 		stbi_uc *image_data = ctx->images[i];
-		//stbi_load(ctx->imagePaths[i], &w, &h, &n, 4);
 		if (ctx->verbose) printf(" Drawing %s\n", ctx->imagePaths[i]);
 		for (int y = 0; y < rect.h-2*d; y++) {
 			for (int x = 0; x < rect.w-2*d; x++) {
@@ -355,7 +353,6 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 				}
 			}
 		}
-		//stbi_image_free(image_data);
 	}
 	stbi_write_png(ctx->outputImagePath, ctx->width, ctx->height, 4, output_data, ctx->width*4);
 	free(output_data);
@@ -366,7 +363,7 @@ static void clear_context(struct ImgPackContext *ctx) {
 	for (int i = 0; i < ctx->size; i++) {
 		free(ctx->imagePaths[i]);
 		stbi_image_free(ctx->images[i]);
-	};
+	}
 	free(ctx->imagePaths);
 	free(ctx->packingRects);
 	free(ctx->sourceRects);
@@ -397,7 +394,7 @@ static int parse_scale(struct ImgPackContext *ctx, const char *scale) {
 		denominator[j] = '\0';
 	}
 	num = strtol(numerator, NULL, 10);
-	den = strtol(numerator, NULL, 10);
+	den = strtol(denominator, NULL, 10);
 	if (num > 0 && den > 0) {
 		ctx->scaleNumerator = num;
 		ctx->scaleDenominator = den;
