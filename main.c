@@ -8,25 +8,44 @@
  */
 
 #include <ctype.h>
-#include <stdlib.h>
 #include <math.h>
 
-#include "isl_args.h"
+#ifndef ISLIP_NOSTDLIB
+#include <stdlib.h>
+#endif
+
+#ifndef NULL
+#define NULL 0
+#endif
+
+#ifndef ISLIP_MALLOC
+#define ISLIP_MALLOC malloc
+#endif
+
+#ifndef ISLIP_REALLOC
+#define ISLIP_REALLOC realloc
+#endif
+
+#ifndef ISLIP_FREE
+#define ISLIP_FREE free
+#endif
+
+#include "external/isl_args.h"
 
 #define STB_IMAGE_IMPLEMENTATION 
-#include "stb_image.h"
+#include "external/stb_image.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "external/stb_image_write.h"
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include "stb_image_resize.h"
+#include "external/stb_image_resize.h"
 
 #define STB_RECT_PACK_IMPLEMENTATION
-#include "stb_rect_pack.h"
+#include "external/stb_rect_pack.h"
 
 #define CUTE_FILES_IMPLEMENTATION
-#include "cute_files.h"
+#include "external/cute_files.h"
 
 enum ImgPackColorFormat {
 	IMGPACK_RGBA8888,
@@ -124,10 +143,10 @@ static int parse_data_color(struct ImgPackContext *ctx, const char *s) {
 static void allocate_images_data(struct ImgPackContext *ctx) {
 	int next_size = ctx->allocated * 2;
 	if (next_size == 0) next_size = 16;
-	ctx->imagePaths = realloc(ctx->imagePaths, next_size * sizeof(*ctx->imagePaths));
-	ctx->packingRects = realloc(ctx->packingRects, next_size * sizeof(*ctx->packingRects));
-	ctx->sourceRects = realloc(ctx->sourceRects, next_size * sizeof(*ctx->sourceRects));
-	ctx->images = realloc(ctx->images, next_size * sizeof(*ctx->images));
+	ctx->imagePaths = ISLIP_REALLOC(ctx->imagePaths, next_size * sizeof(*ctx->imagePaths));
+	ctx->packingRects = ISLIP_REALLOC(ctx->packingRects, next_size * sizeof(*ctx->packingRects));
+	ctx->sourceRects = ISLIP_REALLOC(ctx->sourceRects, next_size * sizeof(*ctx->sourceRects));
+	ctx->images = ISLIP_REALLOC(ctx->images, next_size * sizeof(*ctx->images));
 	ctx->allocated = next_size;
 }
 
@@ -141,7 +160,7 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 	if (ctx->scaleNumerator != 1 || ctx->scaleDenominator != 1) {
 		int resized_width = ctx->scaleNumerator * width / ctx->scaleDenominator;
 		int resized_height = ctx->scaleNumerator * height / ctx->scaleDenominator;
-		stbi_uc *resized_data = malloc(sizeof(*resized_data) * resized_width * resized_height * 4);
+		stbi_uc *resized_data = ISLIP_MALLOC(sizeof(*resized_data) * resized_width * resized_height * 4);
 		stbir_resize_uint8(data, width, height, 0,  resized_data, resized_width, resized_height, 0, 4);
 		if (ctx->verbose) printf("  Resize \"%s\" (%d, %d) => (%d, %d)\n", img_path, width, height, resized_width, resized_height);
 		stbi_image_free(data);
@@ -177,7 +196,7 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 	}
 	ctx->sourceRects[id] = (stbrp_rect) {.x = minX, .y = minY, .w = width, .h = height};
 
-	char *path = malloc(strlen(img_path)+1);
+	char *path = ISLIP_MALLOC(strlen(img_path)+1);
 	strcpy(path, img_path);
 	ctx->imagePaths[id] = path;
 	ctx->packingRects[id] = (stbrp_rect) {
@@ -236,7 +255,7 @@ static int pack_images(struct ImgPackContext *ctx) {
 	if (ctx->verbose) printf("Occupied area is %d\n", occupied_area);
 	if (occupied_area <= 0) return 1;
 	int assumed_side_size = (int)(1.1*sqrt((double)occupied_area));
-	stbrp_node *nodes = malloc(sizeof(*nodes) * ctx->size);
+	stbrp_node *nodes = ISLIP_MALLOC(sizeof(*nodes) * ctx->size);
 	if (!nodes) return 1;
 	if (ctx->forcePOT) {
 		assumed_side_size = upper_power_of_two(assumed_side_size);
@@ -247,7 +266,7 @@ static int pack_images(struct ImgPackContext *ctx) {
 	if (ctx->verbose) printf("Trying to pack %d images into %dx%d\n", ctx->size, assumed_side_size, assumed_side_size);
 	stbrp_init_target(&rp_ctx, assumed_side_size, assumed_side_size, nodes, ctx->size);
 	stbrp_pack_rects(&rp_ctx, ctx->packingRects, ctx->size);
-	free(nodes);
+	ISLIP_FREE(nodes);
 	return 0;
 }
 
@@ -269,7 +288,7 @@ static int write_atlas_data(struct ImgPackContext *ctx) {
 }
 
 static int write_atlas_image(struct ImgPackContext *ctx) {
-	unsigned char *output_data = malloc(4 * ctx->width * ctx->height);
+	unsigned char *output_data = ISLIP_MALLOC(4 * ctx->width * ctx->height);
 	if (ctx->verbose) printf("Drawing atlas image to \"%s\"\n", ctx->outputImagePath);
 	for (int i = 0; i < ctx->size; i++) {
 		struct stbrp_rect rect = ctx->packingRects[i];
@@ -371,19 +390,19 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 		}
 	}
 	stbi_write_png(ctx->outputImagePath, ctx->width, ctx->height, 4, output_data, ctx->width*4);
-	free(output_data);
+	ISLIP_FREE(output_data);
 	return 0;
 }
 
 static void clear_context(struct ImgPackContext *ctx) {
 	for (int i = 0; i < ctx->size; i++) {
-		free(ctx->imagePaths[i]);
+		ISLIP_FREE(ctx->imagePaths[i]);
 		stbi_image_free(ctx->images[i]);
 	}
-	free(ctx->imagePaths);
-	free(ctx->packingRects);
-	free(ctx->sourceRects);
-	free(ctx->images);
+	ISLIP_FREE(ctx->imagePaths);
+	ISLIP_FREE(ctx->packingRects);
+	ISLIP_FREE(ctx->sourceRects);
+	ISLIP_FREE(ctx->images);
 	ctx->imagePaths = NULL;
 	ctx->packingRects = NULL;
 	ctx->sourceRects = NULL;
@@ -443,18 +462,18 @@ int main(int argc, char *argv[]) {
 	IA_BEGIN(argc, argv, "--help", "-?", "ImgPack texture packer v0.7\n"
 		"Copyright 2019 Ilya Kolbin <iskolbin@gmail.com>\n\n"
 		"Usage : imgpack <OPTIONS> <images folder>\n\n"
-		" Key         |    | Value  | Description\n"
-		"-------------+----+--------+----------------------------------------------\n"
-		" --data      | -d | string | output file path, if ommited `stdout` is used\n"
-		" --image     | -i | string | output image path\n"
-		" --format    | -f | string | output atlas data format\n"
-		" --trim      | -t | int    | alpha threshold for trimming image with transparent border, should be 0-255\n"
-		" --padding   | -p | int    | adds transparent padding\n"
-		" --force-pot | -p |        | force power of two texture output\n"
-		" --exturde   | -e | int    | adds copied pixels on image borders, which helps with texture bleeding\n"
-		" --scale     | -s | int/int| scaling ratio int form \"A/B\" or just \"K\""
-		" --verbose   | -v |        | print debug messages during the packing process\n"
-		" --help      | -? |        | prints this memo\n\n")
+		"| Key         |    | Value   | Description\n"
+		"|-------------|----|---------|----------------------------------------------\n"
+		"| --data      | -d | string  | output file path, if ommited `stdout` is used\n"
+		"| --image     | -i | string  | output image path\n"
+		"| --format    | -f | string  | output atlas data format\n"
+		"| --trim      | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255\n"
+		"| --padding   | -p | int     | adds transparent padding\n"
+		"| --force-pot | -p |         | force power of two texture output\n"
+		"| --exturde   | -e | int     | adds copied pixels on image borders, which helps with texture bleeding\n"
+		"| --scale     | -s | int/int | scaling ratio int form \"A/B\" or just \"K\"\n"
+		"| --verbose   | -v |         | print debug messages during the packing process\n"
+		"| --help      | -? |         | prints this memo\n\n")
 		IA_STR("--data", "-d", ctx.outputDataPath)
 		IA_STR("--image", "-i", ctx.outputImagePath)
 		IA_FLAG("--force-pot", "-2", ctx.forcePOT)

@@ -8,7 +8,7 @@ Simple texture atlas generator. Takes folder with images and outputs texture atl
 Quick start
 -----------
 
-To build you will need `C99` compiler and optionally `Make`. All dependencies are packed in the repo, so just clone or download zip the repo and do:
+To build you will need `C99` compiler and optionally `Make`. All dependencies are packed in the repo, so just clone the repo and do:
 
 ```
 make all
@@ -17,21 +17,23 @@ make all
 This will create `imgpack` command-line tool which can be used like:
 
 ```
-imgpack <OPTIONS> <folder with images>
+./imgpack <OPTIONS> <folder with images>
 ```
 
 where options are:
 
-| Key        | Value  | Description
-|------------|--------|------------
-| --data     | string | output file path, if ommited `stdout` is used
-| --image    | string | output image path, if not specified image will not be created
-| --format   | string | output atlas data format, if not specified "C" format will be used
-| --trim     | int    | alpha threshold for trimming image with transparent border, should be 0-255
-| --padding  | int    | adds transparent padding
-| --exturde  | int    | adds copied pixels on image borders, which helps with texture bleeding
-| --verbose  |        | print debug messages during the packing process
-
+| Key         |    | Value   | Description
+|-------------|----|---------|----------------------------------------------
+| --data      | -d | string  | output file path, if ommited `stdout` is used
+| --image     | -i | string  | output image path
+| --format    | -f | string  | output atlas data format
+| --trim      | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255
+| --padding   | -p | int     | adds transparent padding
+| --force-pot | -p |         | force power of two texture output
+| --exturde   | -e | int     | adds copied pixels on image borders, which helps with texture bleeding
+| --scale     | -s | int/int | scaling ratio int form "A/B" or just "K"
+| --verbose   | -v |         | print debug messages during the packing process
+| --help      | -? |         | prints this memo
 
 Output atlas formats
 --------------------
@@ -89,9 +91,7 @@ Todos
 * Better output size guessing
 * Multipacking
 * Limits for max width and max height for output texture
-* Not POT output texture
 * Not square output texture
-* Scaling
 * Compressed output texture (DXT5?)
 * Detecting same images
 * Memory allocation checks
