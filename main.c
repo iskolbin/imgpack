@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.6.1
+ * ImgPack -- simple texture packer v0.6.2
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -177,19 +177,17 @@ static int get_images_data(struct ImgPackContext *ctx, const char *path) {
 		while(dir.has_next) {
 			cf_file_t file;
 			cf_read_file(&dir, &file);
-			if (file.is_reg) {
-				if (file.is_dir) {
-					if (ctx->verbose) printf("  Traverse %s\n", file.name);
-					count += get_images_data(ctx, file.path);
-				} else {
-					if (ctx->verbose) printf("  Reading %s\n", file.name);
-					int width, height, channels;
-					stbi_uc *data = stbi_load(file.path, &width, &height, &channels, 4);
-					if (data) {
-						add_image_data(ctx, data, file.path, width, height);
-						count++;
-						stbi_image_free(data);
-					}
+			if (file.is_dir && file.name[0] != '.') {
+				if (ctx->verbose) printf("  Traverse %s\n", file.name);
+				count += get_images_data(ctx, file.path);
+			} else if (file.is_reg) {
+				if (ctx->verbose) printf("  Reading %s\n", file.name);
+				int width, height, channels;
+				stbi_uc *data = stbi_load(file.path, &width, &height, &channels, 4);
+				if (data) {
+					add_image_data(ctx, data, file.path, width, height);
+					count++;
+					stbi_image_free(data);
 				}
 			}
 			cf_dir_next(&dir);
@@ -211,15 +209,17 @@ static unsigned long upper_power_of_two(unsigned long v) {
 	return v;
 }
 
-static void pack_images(struct ImgPackContext *ctx) {
+static int pack_images(struct ImgPackContext *ctx) {
 	int occupied_area = 0;
 	int side_add = ctx->padding + ctx->extrude;
 	for (int i = 0; i < ctx->size; i++) {
 		occupied_area += ((side_add+ctx->packingRects[i].w)*(side_add+ctx->packingRects[i].h));
 	}
 	if (ctx->verbose) printf("Occupied area is %d\n", occupied_area);
+	if (occupied_area <= 0) return 1;
 	int assumed_side_size = (int)(1.1*sqrt((double)occupied_area));
 	stbrp_node *nodes = malloc(sizeof(*nodes) * ctx->size);
+	if (!nodes) return 1;
 	if (ctx->forcePOT) {
 		assumed_side_size = upper_power_of_two(assumed_side_size);
 	}
@@ -230,6 +230,7 @@ static void pack_images(struct ImgPackContext *ctx) {
 	stbrp_init_target(&rp_ctx, assumed_side_size, assumed_side_size, nodes, ctx->size);
 	stbrp_pack_rects(&rp_ctx, ctx->packingRects, ctx->size);
 	free(nodes);
+	return 0;
 }
 
 static int write_atlas_data(struct ImgPackContext *ctx) {
@@ -239,8 +240,9 @@ static int write_atlas_data(struct ImgPackContext *ctx) {
 	}
 	int status = 1;
 	if (output_file) {
-		if (ctx->verbose) printf("Writing description data to \"%s\"\n", ctx->outputDataPath);
+		if (ctx->verbose) printf("Writing description data to \"%s\"\n", ctx->outputDataPath ? ctx->outputDataPath : "stdout");
 		status = ctx->formatter(ctx, output_file);
+		printf("Written\n");
 		if (output_file != stdout) fclose(output_file);
 	} else {
 		printf("Cannot open for writing \"%s\"", ctx->outputDataPath);
@@ -370,6 +372,34 @@ static void clear_context(struct ImgPackContext *ctx) {
 	ctx->allocated = 0;
 }
 
+static int parse_scale(struct ImgPackContext *ctx, const char *scale) {
+	char numerator[128];
+	char denominator[128] = "1";
+	int i = 0, j = 0;
+	int num = 1, den = 1;
+	for (j = 0; j < 127 && scale[i] != '/'; i++, j++) {
+		numerator[j] = scale[i];
+	}
+	numerator[j+1] = '\0';
+	if (scale[i] == '\0') {
+		num = strtol(numerator, NULL, 10);
+	} else if (scale[i] == '/') {
+		for (j = 0; j < 127 && scale[i] != '\0'; i++, j++) {
+			denominator[j] = scale[i];
+		}
+		denominator[j] = '\0';
+	}
+	num = strtol(numerator, NULL, 10);
+	den = strtol(numerator, NULL, 10);
+	if (num > 0 && den > 0) {
+		ctx->scaleNumerator = num;
+		ctx->scaleDenominator = den;
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
 int main(int argc, char *argv[]) {
 	struct ImgPackContext ctx = {
 		.scaleNumerator = 1,
@@ -381,19 +411,21 @@ int main(int argc, char *argv[]) {
 	char *imagesPath = argv[argc-1];
 	char *format_data = "C";
 	char *format_color = "RGBA8888";
+	char *scale = "1";
 	IA_BEGIN(argc, argv, "--help", "-?", "ImgPack texture packer v0.6\n"
 		"Copyright 2019 Ilya Kolbin <iskolbin@gmail.com>\n\n"
 		"Usage : imgpack <OPTIONS> <images folder>\n\n"
-		" Key       |    | Value  | Description\n"
-		"-----------+----+--------+----------------------------------------------\n"
-		" --data    | -d | string | output file path, if ommited `stdout` is used\n"
-		" --image   | -i | string | output image path\n"
-		" --format  | -f | string | output atlas data format\n"
-		" --trim    | -t | int    | alpha threshold for trimming image with transparent border, should be 0-255\n"
-		" --padding | -p | int    | adds transparent padding\n"
-		" --exturde | -e | int    | adds copied pixels on image borders, which helps with texture bleeding\n"
-		" --verbose | -v |        | print debug messages during the packing process\n"
-		" --help    | -? |        | prints this memo\n\n")
+		" Key         |    | Value  | Description\n"
+		"-------------+----+--------+----------------------------------------------\n"
+		" --data      | -d | string | output file path, if ommited `stdout` is used\n"
+		" --image     | -i | string | output image path\n"
+		" --format    | -f | string | output atlas data format\n"
+		" --trim      | -t | int    | alpha threshold for trimming image with transparent border, should be 0-255\n"
+		" --padding   | -p | int    | adds transparent padding\n"
+		" --force-pot | -p |        | force power of two texture output\n"
+		" --exturde   | -e | int    | adds copied pixels on image borders, which helps with texture bleeding\n"
+		" --verbose   | -v |        | print debug messages during the packing process\n"
+		" --help      | -? |        | prints this memo\n\n")
 		IA_STR("--data", "-d", ctx.outputDataPath)
 		IA_STR("--image", "-i", ctx.outputImagePath)
 		IA_FLAG("--force-pot", "-2", ctx.forcePOT)
@@ -402,27 +434,47 @@ int main(int argc, char *argv[]) {
 		IA_INT("--trim", "-t", ctx.trimThreshold)
 		IA_INT("--padding", "-p", ctx.padding)
 		IA_INT("--extrude", "-e", ctx.extrude)
-		IA_FLAG("--verbose", "-v", ctx.verbose)
 		IA_STR("--format", "-f", format_data) 
 		IA_STR("--color", "-c", format_data) 
+		IA_STR("--scale", "-s", scale);
+		IA_FLAG("--verbose", "-v", ctx.verbose)
 	IA_END
 
+	if (!ctx.outputImagePath) {
+		printf("Specify output image path using --image/-i <image path>");
+		return 1;
+	}
+
 	if (!parse_data_format(&ctx, format_data)) {
-		if (ctx.verbose) printf("Using data format %s", format_data);
+		if (ctx.verbose) printf("Using data format %s\n", format_data);
 	} else {
 		printf("Bad data format \"%s\"\n", format_data);
 		return 1;
 	}
 
 	if (!parse_data_color(&ctx, format_color)) {
-		if (ctx.verbose) printf("Using color format %s", format_color);
+		if (ctx.verbose) printf("Using color format %s\n", format_color);
 	} else {
 		printf("Bad color format \"%s\"\n", format_color);
 		return 1;
 	}
 
+	if (!parse_scale(&ctx, scale)) {
+		if (ctx.verbose) printf("Set scaling to %d/%d\n", ctx.scaleNumerator, ctx.scaleDenominator);
+	} else {
+		printf("Bad scale \"%s\"\n", scale);
+		return 1;
+	}
+
 	get_images_data(&ctx, imagesPath);
-	pack_images(&ctx);
+
+	if (!pack_images(&ctx)) {
+		if (ctx.verbose) printf("Images have been packed\n");
+	} else {
+		printf("Cannot pack images\n");
+		return 1;
+	}
+
 	if (write_atlas_data(&ctx)) return 1;
 	if (ctx.outputImagePath && write_atlas_image(&ctx)) return 1;
 	clear_context(&ctx);
