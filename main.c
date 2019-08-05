@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.6.2
+ * ImgPack -- simple texture packer v0.7.0
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -18,6 +18,9 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize.h"
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #include "stb_rect_pack.h"
@@ -133,8 +136,21 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 	while (id >= ctx->allocated) {
 		allocate_images_data(ctx);
 	}
-	ctx->images[id] = data;
 	ctx->size++;
+
+	if (ctx->scaleNumerator != 1 || ctx->scaleDenominator != 1) {
+		int resized_width = ctx->scaleNumerator * width / ctx->scaleDenominator;
+		int resized_height = ctx->scaleNumerator * height / ctx->scaleDenominator;
+		stbi_uc *resized_data = malloc(sizeof(*resized_data) * resized_width * resized_height * 4);
+		stbir_resize_uint8(data, width, height, 0,  resized_data, resized_width, resized_height, 0, 4);
+		if (ctx->verbose) printf("  Resize \"%s\" (%d, %d) => (%d, %d)\n", img_path, width, height, resized_width, resized_height);
+		stbi_image_free(data);
+		data = resized_data;
+		width = resized_width;
+		height = resized_height;
+	}
+
+	ctx->images[id] = data;
 
 	int minY = 0, minX = 0, maxY = height-1, maxX = width-1;
 	if (ctx->trimThreshold >= 0) {
@@ -381,13 +397,14 @@ static int parse_scale(struct ImgPackContext *ctx, const char *scale) {
 	char denominator[128] = "1";
 	int i = 0, j = 0;
 	int num = 1, den = 1;
-	for (j = 0; j < 127 && scale[i] != '/'; i++, j++) {
+	for (j = 0; j < 127 && scale[i] != '/' && scale[i] != '\0'; i++, j++) {
 		numerator[j] = scale[i];
 	}
 	numerator[j+1] = '\0';
 	if (scale[i] == '\0') {
 		num = strtol(numerator, NULL, 10);
 	} else if (scale[i] == '/') {
+		i++;
 		for (j = 0; j < 127 && scale[i] != '\0'; i++, j++) {
 			denominator[j] = scale[i];
 		}
@@ -396,8 +413,15 @@ static int parse_scale(struct ImgPackContext *ctx, const char *scale) {
 	num = strtol(numerator, NULL, 10);
 	den = strtol(denominator, NULL, 10);
 	if (num > 0 && den > 0) {
-		ctx->scaleNumerator = num;
-		ctx->scaleDenominator = den;
+		int gcd = 1;
+		for(int k = 1; k <= num && k <= den; k++) {
+			if (num % k == 0 && den % k == 0) {
+				gcd = k;
+			}
+    }
+		ctx->scaleNumerator = num / gcd;
+		ctx->scaleDenominator = den / gcd;
+		printf("%d %d\n", ctx->scaleNumerator, ctx->scaleDenominator);
 		return 0;
 	} else {
 		return 1;
@@ -416,7 +440,7 @@ int main(int argc, char *argv[]) {
 	char *format_data = "C";
 	char *format_color = "RGBA8888";
 	char *scale = "1";
-	IA_BEGIN(argc, argv, "--help", "-?", "ImgPack texture packer v0.6\n"
+	IA_BEGIN(argc, argv, "--help", "-?", "ImgPack texture packer v0.7\n"
 		"Copyright 2019 Ilya Kolbin <iskolbin@gmail.com>\n\n"
 		"Usage : imgpack <OPTIONS> <images folder>\n\n"
 		" Key         |    | Value  | Description\n"
@@ -428,6 +452,7 @@ int main(int argc, char *argv[]) {
 		" --padding   | -p | int    | adds transparent padding\n"
 		" --force-pot | -p |        | force power of two texture output\n"
 		" --exturde   | -e | int    | adds copied pixels on image borders, which helps with texture bleeding\n"
+		" --scale     | -s | int/int| scaling ratio int form \"A/B\" or just \"K\""
 		" --verbose   | -v |        | print debug messages during the packing process\n"
 		" --help      | -? |        | prints this memo\n\n")
 		IA_STR("--data", "-d", ctx.outputDataPath)
