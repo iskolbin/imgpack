@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.7.0
+ * ImgPack -- simple texture packer v0.7.1
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -65,6 +65,7 @@ struct ImgPackContext {
 	int verbose;
 
 	char **imagePaths;
+	uint64_t *imageHashes;
 	struct stbrp_rect *sourceRects;
 	struct stbrp_rect *packingRects;
 	stbi_uc **images;
@@ -147,6 +148,7 @@ static void allocate_images_data(struct ImgPackContext *ctx) {
 	ctx->packingRects = ISLIP_REALLOC(ctx->packingRects, next_size * sizeof(*ctx->packingRects));
 	ctx->sourceRects = ISLIP_REALLOC(ctx->sourceRects, next_size * sizeof(*ctx->sourceRects));
 	ctx->images = ISLIP_REALLOC(ctx->images, next_size * sizeof(*ctx->images));
+	ctx->imageHashes = ISLIP_REALLOC(ctx->imageHashes, next_size * sizeof(*ctx->imageHashes));
 	ctx->allocated = next_size;
 }
 
@@ -195,6 +197,20 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 		}
 	}
 	ctx->sourceRects[id] = (stbrp_rect) {.x = minX, .y = minY, .w = width, .h = height};
+
+	// FNV hash function C99 adapation
+	// for more info visit http://www.isthe.com/chongo/tech/comp/fnv/
+	uint64_t h = 0xcbf29ce484222325ULL;
+	for (int y = minY; y < maxY; y++) {
+		for (int x = minX; x < maxX; x++) {
+			h = (h ^ data[4*(y*width+x)]) * 0x100000001b3ULL;
+			h = (h ^ data[4*(y*width+x)+1]) * 0x100000001b3ULL;
+			h = (h ^ data[4*(y*width+x)+2]) * 0x100000001b3ULL;
+			h = (h ^ data[4*(y*width+x)+3]) * 0x100000001b3ULL;
+		}
+	}
+	ctx->imageHashes[id] = h;
+	if (ctx->verbose) printf("  Hash of \"%s\" is %lx\n", img_path, h);
 
 	char *path = ISLIP_MALLOC(strlen(img_path)+1);
 	strcpy(path, img_path);
@@ -403,10 +419,12 @@ static void clear_context(struct ImgPackContext *ctx) {
 	ISLIP_FREE(ctx->packingRects);
 	ISLIP_FREE(ctx->sourceRects);
 	ISLIP_FREE(ctx->images);
+	ISLIP_FREE(ctx->imageHashes);
 	ctx->imagePaths = NULL;
 	ctx->packingRects = NULL;
 	ctx->sourceRects = NULL;
 	ctx->images = NULL;
+	ctx->imageHashes = NULL;
 	ctx->size = 0;
 	ctx->allocated = 0;
 }
