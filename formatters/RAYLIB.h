@@ -13,7 +13,7 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	}
 	fprintf(f, "enum %sIds {\n", name);
 	for (int i = 0; i < ctx->size; i++) {
-		char *image_path = ctx->imagePaths[i];
+		char *image_path = ctx->images[i].path;
 		int point_pos, start_pos;
 		for (point_pos = strlen(image_path)-1; point_pos > 0 && image_path[point_pos] != '.'; point_pos--) {}
 		for (start_pos = point_pos-1; start_pos > 0 && (isalnum(image_path[start_pos-1]) || image_path[start_pos-1] == '_'); start_pos--) {}
@@ -42,7 +42,7 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 
 	fprintf(f, "static const Vector2 %sSourceSize[%d] = {\n", name, ctx->size);
 	for (int i = 0; i < ctx->size; i++) {
-		fprintf(f, "\t{%d, %d},\n", ctx->sourceRects[i].w, ctx->sourceRects[i].h);
+		fprintf(f, "\t{%d, %d},\n", ctx->images[i].source.w, ctx->images[i].source.h);
 	}
 	fprintf(f, "};\n");
 	return 0;

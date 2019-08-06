@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.7.1
+ * ImgPack -- simple texture packer v0.7.2
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -51,6 +51,13 @@ enum ImgPackColorFormat {
 	IMGPACK_RGBA8888,
 };
 
+struct ImgPackImage {
+	char *path;
+	uint64_t hash;
+	stbrp_rect source;
+	stbi_uc *data;
+};
+
 struct ImgPackContext {
 	enum ImgPackColorFormat colorFormat;
 	int (*formatter)(struct ImgPackContext *ctx, FILE *output_file);
@@ -64,11 +71,8 @@ struct ImgPackContext {
 	int extrude;
 	int verbose;
 
-	char **imagePaths;
-	uint64_t *imageHashes;
-	struct stbrp_rect *sourceRects;
+	struct ImgPackImage *images;
 	struct stbrp_rect *packingRects;
-	stbi_uc **images;
 	int size;
 	int allocated;
 
@@ -96,7 +100,10 @@ static int is_image_rotated(struct ImgPackContext *ctx, int id) {
 static int is_image_trimmed(struct ImgPackContext *ctx, int id) {
 	if (id >= 0 && id < ctx->size) {
 		int d = ctx->padding + ctx->extrude;
-		return ctx->sourceRects[id].x != 0 || ctx->sourceRects[id].y != 0 || ctx->sourceRects[id].w != ctx->packingRects[id].w-2*d || ctx->sourceRects[id].h != ctx->packingRects[id].h-2*d; 
+		return ctx->images[id].source.x != 0 ||
+			ctx->images[id].source.y != 0 ||
+			ctx->images[id].source.w != ctx->packingRects[id].w-2*d ||
+			ctx->images[id].source.h != ctx->packingRects[id].h-2*d; 
 	} else {
 		return -1;
 	}
@@ -144,11 +151,8 @@ static int parse_data_color(struct ImgPackContext *ctx, const char *s) {
 static void allocate_images_data(struct ImgPackContext *ctx) {
 	int next_size = ctx->allocated * 2;
 	if (next_size == 0) next_size = 16;
-	ctx->imagePaths = ISLIP_REALLOC(ctx->imagePaths, next_size * sizeof(*ctx->imagePaths));
 	ctx->packingRects = ISLIP_REALLOC(ctx->packingRects, next_size * sizeof(*ctx->packingRects));
-	ctx->sourceRects = ISLIP_REALLOC(ctx->sourceRects, next_size * sizeof(*ctx->sourceRects));
 	ctx->images = ISLIP_REALLOC(ctx->images, next_size * sizeof(*ctx->images));
-	ctx->imageHashes = ISLIP_REALLOC(ctx->imageHashes, next_size * sizeof(*ctx->imageHashes));
 	ctx->allocated = next_size;
 }
 
@@ -170,8 +174,6 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 		width = resized_width;
 		height = resized_height;
 	}
-
-	ctx->images[id] = data;
 
 	int minY = 0, minX = 0, maxY = height-1, maxX = width-1;
 	if (ctx->trimThreshold >= 0) {
@@ -196,25 +198,28 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 			break;
 		}
 	}
-	ctx->sourceRects[id] = (stbrp_rect) {.x = minX, .y = minY, .w = width, .h = height};
 
 	// FNV hash function C99 adapation
 	// for more info visit http://www.isthe.com/chongo/tech/comp/fnv/
-	uint64_t h = 0xcbf29ce484222325ULL;
+	uint64_t hash = 0xcbf29ce484222325ULL;
 	for (int y = minY; y < maxY; y++) {
 		for (int x = minX; x < maxX; x++) {
-			h = (h ^ data[4*(y*width+x)]) * 0x100000001b3ULL;
-			h = (h ^ data[4*(y*width+x)+1]) * 0x100000001b3ULL;
-			h = (h ^ data[4*(y*width+x)+2]) * 0x100000001b3ULL;
-			h = (h ^ data[4*(y*width+x)+3]) * 0x100000001b3ULL;
+			hash = (hash ^ data[4*(y*width+x)]) * 0x100000001b3ULL;
+			hash = (hash ^ data[4*(y*width+x)+1]) * 0x100000001b3ULL;
+			hash = (hash ^ data[4*(y*width+x)+2]) * 0x100000001b3ULL;
+			hash = (hash ^ data[4*(y*width+x)+3]) * 0x100000001b3ULL;
 		}
 	}
-	ctx->imageHashes[id] = h;
-	if (ctx->verbose) printf("  Hash of \"%s\" is %llx\n", img_path, h);
+	if (ctx->verbose) printf("  Hash of \"%s\" is %llx\n", img_path, hash);
 
 	char *path = ISLIP_MALLOC(strlen(img_path)+1);
 	strcpy(path, img_path);
-	ctx->imagePaths[id] = path;
+	ctx->images[id] = (struct ImgPackImage) {
+		.path = path,
+		.hash = hash,
+		.source = (stbrp_rect) {.x = minX, .y = minY, .w = width, .h = height},
+		.data = data,
+	};
 	ctx->packingRects[id] = (stbrp_rect) {
 		.id = id,
 		.w = maxX - minX + 1 + 2*(ctx->padding + ctx->extrude),
@@ -308,11 +313,11 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 	if (ctx->verbose) printf("Drawing atlas image to \"%s\"\n", ctx->outputImagePath);
 	for (int i = 0; i < ctx->size; i++) {
 		struct stbrp_rect rect = ctx->packingRects[i];
-		int x0 = ctx->sourceRects[i].x, y0 = ctx->sourceRects[i].y;
+		int x0 = ctx->images[i].source.x, y0 = ctx->images[i].source.y;
 		int d = ctx->padding + ctx->extrude;
-		int w = ctx->sourceRects[i].w, h = ctx->sourceRects[i].h;
-		stbi_uc *image_data = ctx->images[i];
-		if (ctx->verbose) printf(" Drawing %s\n", ctx->imagePaths[i]);
+		int w = ctx->images[i].source.w, h = ctx->images[i].source.h;
+		stbi_uc *image_data = ctx->images[i].data;
+		if (ctx->verbose) printf(" Drawing %s\n", ctx->images[i].path);
 		for (int y = 0; y < rect.h-2*d; y++) {
 			for (int x = 0; x < rect.w-2*d; x++) {
 				int output_offset = 4*(x+rect.x+d + (y+rect.y+d)*ctx->width);
@@ -412,19 +417,13 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 
 static void clear_context(struct ImgPackContext *ctx) {
 	for (int i = 0; i < ctx->size; i++) {
-		ISLIP_FREE(ctx->imagePaths[i]);
-		stbi_image_free(ctx->images[i]);
+		ISLIP_FREE(ctx->images[i].path);
+		stbi_image_free(ctx->images[i].data);
 	}
-	ISLIP_FREE(ctx->imagePaths);
 	ISLIP_FREE(ctx->packingRects);
-	ISLIP_FREE(ctx->sourceRects);
 	ISLIP_FREE(ctx->images);
-	ISLIP_FREE(ctx->imageHashes);
-	ctx->imagePaths = NULL;
 	ctx->packingRects = NULL;
-	ctx->sourceRects = NULL;
 	ctx->images = NULL;
-	ctx->imageHashes = NULL;
 	ctx->size = 0;
 	ctx->allocated = 0;
 }

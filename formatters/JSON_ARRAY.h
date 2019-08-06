@@ -3,12 +3,12 @@ static int imgpack_formatter_JSON_ARRAY(struct ImgPackContext *ctx, FILE *f) {
 	for (int i = 0; i < ctx->size; i++) {
 		struct stbrp_rect frame = get_frame_rect(ctx, i);
 		fprintf(f, "{\n");
-		fprintf(f, "\t\"filename\": \"%s\",\n", ctx->imagePaths[i]);
+		fprintf(f, "\t\"filename\": \"%s\",\n", ctx->images[i].path);
 		fprintf(f, "\t\"frame\": {\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d},\n", frame.x, frame.y, frame.w, frame.h);
 		fprintf(f, "\t\"rotated\": %s,\n", is_image_rotated(ctx, i) ? "true" : "false");
 		fprintf(f, "\t\"trimmed\": %s,\n", is_image_trimmed(ctx, i) ? "true" : "false");
-		fprintf(f, "\t\"spriteSourceSize\": {\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d},\n", ctx->sourceRects[i].x, ctx->sourceRects[i].y, frame.w, frame.h);
-		fprintf(f, "\t\"sourceRects\": {\"w\":%d,\"h\":%d},\n", ctx->sourceRects[i].w, ctx->sourceRects[i].h);
+		fprintf(f, "\t\"spriteSourceSize\": {\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d},\n", ctx->images[i].source.x, ctx->images[i].source.y, frame.w, frame.h);
+		fprintf(f, "\t\"sourceRects\": {\"w\":%d,\"h\":%d},\n", ctx->images[i].source.w, ctx->images[i].source.h);
 		fprintf(f, "\t\"pivot\": {\"x\":0.5,\"y\":0.5}\n");
 		fprintf(f, "}%s\n", i == ctx->size-1 ? "]," : ",");
 	}
