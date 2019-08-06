@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.7.2
+ * ImgPack -- simple texture packer v0.8.0
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -56,6 +56,7 @@ struct ImgPackImage {
 	uint64_t hash;
 	stbrp_rect source;
 	stbi_uc *data;
+	int copyOf;
 };
 
 struct ImgPackContext {
@@ -69,6 +70,7 @@ struct ImgPackContext {
 	int maxHeight;
 	int padding;
 	int extrude;
+	int unique;
 	int verbose;
 
 	struct ImgPackImage *images;
@@ -116,6 +118,9 @@ static const char *get_output_image_format(struct ImgPackContext *ctx) {
 static struct stbrp_rect get_frame_rect(struct ImgPackContext *ctx, int id) {
 	struct stbrp_rect frame = {0};
 	if (id >= 0 && id < ctx->size) {
+		if (ctx->images[id].copyOf >= 0) {
+			return get_frame_rect(ctx, ctx->images[id].copyOf);
+		}
 		int d = ctx->padding + ctx->extrude;
 		frame.x = ctx->packingRects[id].x + d;
 		frame.y = ctx->packingRects[id].y + d;
@@ -219,12 +224,36 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 		.hash = hash,
 		.source = (stbrp_rect) {.x = minX, .y = minY, .w = width, .h = height},
 		.data = data,
+		.copyOf = -1,
 	};
+
 	ctx->packingRects[id] = (stbrp_rect) {
 		.id = id,
 		.w = maxX - minX + 1 + 2*(ctx->padding + ctx->extrude),
 		.h = maxY - minY + 1 + 2*(ctx->padding + ctx->extrude),
 	};
+
+	if (ctx->unique) {
+		// TODO probably should use hashtable (stb_ds?) to avoid O(n^2)
+		for (int i = id-1; i >= 0; i--) {
+			if (ctx->images[i].copyOf < 0) {
+				if (ctx->images[i].hash == hash) {
+					// Is this enough? Well in most cases yes
+					if (ctx->images[i].source.x == ctx->images[id].source.x &&
+							ctx->images[i].source.y == ctx->images[id].source.y &&
+							ctx->images[i].source.w == ctx->images[id].source.w &&
+							ctx->images[i].source.h == ctx->images[id].source.h &&
+							ctx->packingRects[i].w == ctx->packingRects[id].w &&
+							ctx->packingRects[i].h == ctx->packingRects[id].h) {
+						ctx->images[id].copyOf = i;
+						ctx->packingRects[id].w = 0;
+						ctx->packingRects[id].h = 0;
+						break;
+					}
+				}
+			}
+		}
+	}
 	if (ctx->verbose) printf("  Added \"%s\" %dx%d(trimmed to %dx%d)\n", path, width, height, maxX - minX + 1, maxY - minY + 1);
 }
 
@@ -313,6 +342,7 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 	if (ctx->verbose) printf("Drawing atlas image to \"%s\"\n", ctx->outputImagePath);
 	for (int i = 0; i < ctx->size; i++) {
 		struct stbrp_rect rect = ctx->packingRects[i];
+		if (rect.w == 0 || rect.h == 0) continue;
 		int x0 = ctx->images[i].source.x, y0 = ctx->images[i].source.y;
 		int d = ctx->padding + ctx->extrude;
 		int w = ctx->images[i].source.w, h = ctx->images[i].source.h;
@@ -486,9 +516,10 @@ int main(int argc, char *argv[]) {
 		"| --format    | -f | string  | output atlas data format\n"
 		"| --trim      | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255\n"
 		"| --padding   | -p | int     | adds transparent padding\n"
-		"| --force-pot | -p |         | force power of two texture output\n"
+		"| --force-pot | -2 |         | force power of two texture output\n"
 		"| --exturde   | -e | int     | adds copied pixels on image borders, which helps with texture bleeding\n"
 		"| --scale     | -s | int/int | scaling ratio int form \"A/B\" or just \"K\"\n"
+		"| --unique    | -u |         | remove identical images (after trimming)\n"
 		"| --verbose   | -v |         | print debug messages during the packing process\n"
 		"| --help      | -? |         | prints this memo\n\n")
 		IA_STR("--data", "-d", ctx.outputDataPath)
@@ -496,6 +527,7 @@ int main(int argc, char *argv[]) {
 		IA_FLAG("--force-pot", "-2", ctx.forcePOT)
 		IA_FLAG("--force-squared", "-sq", ctx.forceSquared)
 		IA_FLAG("--multipack", "-m", ctx.allowMultipack)
+		IA_FLAG("--unique", "-u", ctx.unique)
 		IA_INT("--trim", "-t", ctx.trimThreshold)
 		IA_INT("--padding", "-p", ctx.padding)
 		IA_INT("--extrude", "-e", ctx.extrude)

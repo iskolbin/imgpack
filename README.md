@@ -29,9 +29,10 @@ where options are:
 | --format    | -f | string  | output atlas data format
 | --trim      | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255
 | --padding   | -p | int     | adds transparent padding
-| --force-pot | -p |         | force power of two texture output
+| --force-pot | -2 |         | force power of two texture output
 | --exturde   | -e | int     | adds copied pixels on image borders, which helps with texture bleeding
 | --scale     | -s | int/int | scaling ratio int form "A/B" or just "K"
+| --unique    | -u |         | remove identical images (after trimming)
 | --verbose   | -v |         | print debug messages during the packing process
 | --help      | -? |         | prints this memo
 
@@ -93,7 +94,6 @@ Todos
 * Limits for max width and max height for output texture
 * Not square output texture
 * Compressed output texture (DXT5?)
-* Detecting same images
 * Memory allocation checks
 * Input error checking
 
