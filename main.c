@@ -9,6 +9,7 @@
 
 #include <ctype.h>
 #include <math.h>
+#include <inttypes.h>
 
 #ifndef ISLIP_NOSTDLIB
 #include <stdlib.h>
@@ -215,7 +216,7 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 			hash = (hash ^ data[4*(y*width+x)+3]) * 0x100000001b3ULL;
 		}
 	}
-	if (ctx->verbose) printf("  Hash of \"%s\" is %llx\n", img_path, hash);
+	if (ctx->verbose) printf("  Hash of \"%s\" is %" PRIx64 "\n", img_path, hash);
 
 	char *path = ISLIP_MALLOC(strlen(img_path)+1);
 	strcpy(path, img_path);

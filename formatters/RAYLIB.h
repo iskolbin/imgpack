@@ -29,7 +29,7 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	}
 	fprintf(f, "};\n\n");
 
-	fprintf(f, "static const char *%sImage = \"%s\";\n\n", name, ctx->outputImagePath);
+	fprintf(f, "static const char *%sImagePath = \"%s\";\n\n", name, ctx->outputImagePath);
 
 	fprintf(f, "static const Vector2 %sScale = {%d, %d};\n\n", name, ctx->scaleNumerator, ctx->scaleDenominator);
 	
@@ -50,6 +50,34 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	for (int i = 0; i < ctx->size; i++) {
 		fprintf(f, "  {%d, %d},\t/* %d (%s) */\n", ctx->images[i].source.w, ctx->images[i].source.h, i, ctx->images[i].path);
 	}
-	fprintf(f, "};\n");
+	fprintf(f, "};\n\n");
+
+	fprintf(f, "Texture %sTexture = {0};\n\n", name);
+
+	fprintf(f, "void %sLoad(void) {\n", name);
+	fprintf(f, "  %sTexture = LoadTexture(%sImagePath);\n", name, name);
+	fprintf(f, "}\n\n");
+
+	fprintf(f, "void %sUnload(void) {\n", name);
+	fprintf(f, "  UnloadTexture(%sTexture);\n", name);
+	fprintf(f, "  %sTexture = (Texture) {0};\n", name);
+	fprintf(f, "}\n\n");
+
+	fprintf(f, "void %sDrawEx(enum %sIds id, float x, float y, float xscl, float yscl, float rot, Color color) {\n", name, name);
+	fprintf(f, "  Rectangle dest = %sFrame[id];\n", name);
+	fprintf(f, "  Vector2 offset = %sOffset[id];\n", name);
+	fprintf(f, "  Vector2 origin = %sSourceSize[id];\n", name);
+	fprintf(f, "  float w = dest.width * xscl, h = dest.height * yscl;\n");
+	fprintf(f, "  origin.x = 0.5*(origin.x+w-dest.width); origin.y = 0.5*(origin.y+h-dest.height);\n");
+	fprintf(f, "  dest.x = x + offset.x; dest.y = y + offset.y; dest.width *= xscl; dest.height *= yscl;\n");
+	fprintf(f, "  DrawTexturePro(%sTexture, %sFrame[id], dest, origin, rot, color);\n", name, name);
+	fprintf(f, "}\n\n");
+
+	fprintf(f, "void %sDraw(enum %sIds id, float x, float y, Color color) {\n", name, name);
+	fprintf(f, "  Rectangle dest = %sFrame[id];\n", name);
+	fprintf(f, "  Vector2 offset = %sOffset[id];\n", name);
+	fprintf(f, "  dest.x = x + offset.x; dest.y = y + offset.y;\n");
+	fprintf(f, "  DrawTexturePro(%sTexture, %sFrame[id], dest, (Vector2){0,0}, 0, color);\n", name, name);
+	fprintf(f, "}\n");
 	return 0;
 }
