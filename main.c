@@ -210,7 +210,7 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 		}
 	}
 	ctx->imageHashes[id] = h;
-	if (ctx->verbose) printf("  Hash of \"%s\" is %lx\n", img_path, h);
+	if (ctx->verbose) printf("  Hash of \"%s\" is %llx\n", img_path, h);
 
 	char *path = ISLIP_MALLOC(strlen(img_path)+1);
 	strcpy(path, img_path);
