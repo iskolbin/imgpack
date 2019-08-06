@@ -25,7 +25,7 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 			else buffer[j] = ch;
 		}
 		buffer[j] = '\0';
-		fprintf(f, "\t%s%s = %d,\n", name, buffer, i);
+		fprintf(f, "  %s%s = %d,\n", name, buffer, i);
 	}
 	fprintf(f, "};\n\n");
 
@@ -36,13 +36,19 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	fprintf(f, "static const Rectangle %sFrame[%d] = {\n", name, ctx->size);
 	for (int i = 0; i < ctx->size; i++) {
 		struct stbrp_rect frame = get_frame_rect(ctx, i);
-		fprintf(f, "\t{%d, %d, %d, %d},\n", frame.x, frame.y, frame.w, frame.h);
+		fprintf(f, "  {%d, %d, %d, %d},\t/* %d (%s) */\n", frame.x, frame.y, frame.w, frame.h, i, ctx->images[i].path);
+	}
+	fprintf(f, "};\n\n");
+
+	fprintf(f, "static const Vector2 %sOffset[%d] = {\n", name, ctx->size);
+	for (int i = 0; i < ctx->size; i++) {
+		fprintf(f, "  {%d, %d},\t/* %d (%s) */\n", ctx->images[i].source.x, ctx->images[i].source.y, i, ctx->images[i].path);
 	}
 	fprintf(f, "};\n\n");
 
 	fprintf(f, "static const Vector2 %sSourceSize[%d] = {\n", name, ctx->size);
 	for (int i = 0; i < ctx->size; i++) {
-		fprintf(f, "\t{%d, %d},\n", ctx->images[i].source.w, ctx->images[i].source.h);
+		fprintf(f, "  {%d, %d},\t/* %d (%s) */\n", ctx->images[i].source.w, ctx->images[i].source.h, i, ctx->images[i].path);
 	}
 	fprintf(f, "};\n");
 	return 0;
