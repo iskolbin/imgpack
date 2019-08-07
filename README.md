@@ -92,7 +92,6 @@ Todos
 -----
 
 * Multipacking
-* Limits for max width and max height for output texture
 * Not square output texture
 * Compressed output texture (DXT5?)
 * Memory allocation checks
