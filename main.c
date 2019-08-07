@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.8.0
+ * ImgPack -- simple texture packer v0.8.1
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -67,6 +67,7 @@ struct ImgPackContext {
 	int forceSquared;
 	int allowMultipack;
 	int trimThreshold;
+	double sideGrowCoefficient;
 	int maxWidth;
 	int maxHeight;
 	int padding;
@@ -305,18 +306,27 @@ static int pack_images(struct ImgPackContext *ctx) {
 	}
 	if (ctx->verbose) printf("Occupied area is %d\n", occupied_area);
 	if (occupied_area <= 0) return 1;
-	int assumed_side_size = (int)(1.1*sqrt((double)occupied_area));
+	int assumed_side_size = (int)sqrt((double)occupied_area);
+	assumed_side_size /= 2;
 	stbrp_node *nodes = ISLIP_MALLOC(sizeof(*nodes) * ctx->size);
 	if (!nodes) return 1;
-	if (ctx->forcePOT) {
-		assumed_side_size = upper_power_of_two(assumed_side_size);
-	}
-	ctx->width = assumed_side_size;
-	ctx->height = assumed_side_size;
 	stbrp_context rp_ctx = {0};
-	if (ctx->verbose) printf("Trying to pack %d images into %dx%d\n", ctx->size, assumed_side_size, assumed_side_size);
-	stbrp_init_target(&rp_ctx, assumed_side_size, assumed_side_size, nodes, ctx->size);
-	stbrp_pack_rects(&rp_ctx, ctx->packingRects, ctx->size);
+	do {
+		if (ctx->forcePOT) {
+			int pot_side_size = upper_power_of_two(assumed_side_size);
+			if (pot_side_size >= (ctx->sideGrowCoefficient*assumed_side_size)) {
+				assumed_side_size = pot_side_size;
+			} else {
+				assumed_side_size = upper_power_of_two(pot_side_size+1);
+			}
+		} else {
+			assumed_side_size = ctx->sideGrowCoefficient*assumed_side_size;
+		}
+		ctx->width = assumed_side_size;
+		ctx->height = assumed_side_size;
+		if (ctx->verbose) printf("Trying to pack %d images into %dx%d\n", ctx->size, assumed_side_size, assumed_side_size);
+		stbrp_init_target(&rp_ctx, assumed_side_size, assumed_side_size, nodes, ctx->size);
+	} while (!stbrp_pack_rects(&rp_ctx, ctx->packingRects, ctx->size));
 	ISLIP_FREE(nodes);
 	return 0;
 }
@@ -499,6 +509,7 @@ int main(int argc, char *argv[]) {
 	struct ImgPackContext ctx = {
 		.scaleNumerator = 1,
 		.scaleDenominator = 1,
+		.sideGrowCoefficient = 1.2,
 		.trimThreshold = -1,
 		.argc = argc,
 		.argv = argv,

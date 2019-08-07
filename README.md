@@ -89,7 +89,6 @@ Outputs JSON formatted like TexturePacker does
 Todos
 -----
 
-* Better output size guessing
 * Multipacking
 * Limits for max width and max height for output texture
 * Not square output texture
