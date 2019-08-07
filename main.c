@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.8.1
+ * ImgPack -- simple texture packer v0.8.2
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -307,7 +307,8 @@ static int pack_images(struct ImgPackContext *ctx) {
 	if (ctx->verbose) printf("Occupied area is %d\n", occupied_area);
 	if (occupied_area <= 0) return 1;
 	int assumed_side_size = (int)sqrt((double)occupied_area);
-	assumed_side_size /= 2;
+	ctx->width = assumed_side_size;
+	ctx->height = assumed_side_size;
 	stbrp_node *nodes = ISLIP_MALLOC(sizeof(*nodes) * ctx->size);
 	if (!nodes) return 1;
 	stbrp_context rp_ctx = {0};
@@ -322,8 +323,29 @@ static int pack_images(struct ImgPackContext *ctx) {
 		} else {
 			assumed_side_size = ctx->sideGrowCoefficient*assumed_side_size;
 		}
-		ctx->width = assumed_side_size;
-		ctx->height = assumed_side_size;
+
+		// TODO wrong logic, but its pointless to fix without supporting non square atlases
+		if (ctx->maxWidth > 0) {
+			if (ctx->width >= ctx->maxWidth) {
+				if (ctx->verbose) printf("Exceeded max width constraint %d\n", ctx->maxWidth);
+				return 1;
+			} else {
+				ctx->width = ctx->maxWidth > assumed_side_size ? assumed_side_size : ctx->maxWidth;
+			}
+		} else {
+			ctx->width = assumed_side_size;
+		}
+		if (ctx->maxHeight > 0) {
+			if (ctx->height >= ctx->maxHeight) {
+				if (ctx->verbose) printf("Exceeded max height constraint %d\n", ctx->maxHeight);
+				return 1;
+			} else {
+				ctx->height = ctx->maxHeight > assumed_side_size ? assumed_side_size : ctx->maxHeight;
+			}
+		} else {
+			ctx->height = assumed_side_size;
+		}
+
 		if (ctx->verbose) printf("Trying to pack %d images into %dx%d\n", ctx->size, assumed_side_size, assumed_side_size);
 		stbrp_init_target(&rp_ctx, assumed_side_size, assumed_side_size, nodes, ctx->size);
 	} while (!stbrp_pack_rects(&rp_ctx, ctx->packingRects, ctx->size));
@@ -498,7 +520,6 @@ static int parse_scale(struct ImgPackContext *ctx, const char *scale) {
     }
 		ctx->scaleNumerator = num / gcd;
 		ctx->scaleDenominator = den / gcd;
-		printf("%d %d\n", ctx->scaleNumerator, ctx->scaleDenominator);
 		return 0;
 	} else {
 		return 1;
@@ -518,34 +539,38 @@ int main(int argc, char *argv[]) {
 	char *format_data = "C";
 	char *format_color = "RGBA8888";
 	char *scale = "1";
-	IA_BEGIN(argc, argv, "--help", "-?", "ImgPack texture packer v0.7\n"
+	IA_BEGIN(argc, argv, "--help", "-?", "ImgPack texture packer v0.8\n"
 		"Copyright 2019 Ilya Kolbin <iskolbin@gmail.com>\n\n"
 		"Usage : imgpack <OPTIONS> <images folder>\n\n"
-		"| Key         |    | Value   | Description\n"
-		"|-------------|----|---------|----------------------------------------------\n"
-		"| --data      | -d | string  | output file path, if ommited `stdout` is used\n"
-		"| --image     | -i | string  | output image path\n"
-		"| --format    | -f | string  | output atlas data format\n"
-		"| --trim      | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255\n"
-		"| --padding   | -p | int     | adds transparent padding\n"
-		"| --force-pot | -2 |         | force power of two texture output\n"
-		"| --exturde   | -e | int     | adds copied pixels on image borders, which helps with texture bleeding\n"
-		"| --scale     | -s | int/int | scaling ratio int form \"A/B\" or just \"K\"\n"
-		"| --unique    | -u |         | remove identical images (after trimming)\n"
-		"| --verbose   | -v |         | print debug messages during the packing process\n"
-		"| --help      | -? |         | prints this memo\n\n")
+		"| Key          |    | Value   | Description\n"
+		"|--------------|----|---------|----------------------------------------------\n"
+		"| --data       | -d | string  | output file path, if ommited `stdout` is used\n"
+		"| --image      | -i | string  | output image path (NEEDED)\n"
+		"| --format     | -f | string  | output atlas data format\n"
+		"| --trim       | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255\n"
+		"| --padding    | -p | int     | adds transparent padding\n"
+		"| --exturde    | -e | int     | adds copied pixels on image borders, which helps with texture bleeding\n"
+		"| --max-width  | -w | int     | maximum atlas width\n"
+		"| --max-height | -h | int     | maximum atlas height\n"
+		"| --scale      | -s | int/int | scaling ratio int form \"A/B\" or just \"K\"\n"
+		"| --unique     | -u |         | remove identical images (after trimming)\n"
+		"| --force-pot  | -2 |         | force power of two texture output\n"
+		"| --verbose    | -v |         | print debug messages during the packing process\n"
+		"| --help       | -? |         | prints this memo\n\n")
 		IA_STR("--data", "-d", ctx.outputDataPath)
 		IA_STR("--image", "-i", ctx.outputImagePath)
-		IA_FLAG("--force-pot", "-2", ctx.forcePOT)
-		IA_FLAG("--force-squared", "-sq", ctx.forceSquared)
-		IA_FLAG("--multipack", "-m", ctx.allowMultipack)
-		IA_FLAG("--unique", "-u", ctx.unique)
+		IA_STR("--format", "-f", format_data)
 		IA_INT("--trim", "-t", ctx.trimThreshold)
 		IA_INT("--padding", "-p", ctx.padding)
 		IA_INT("--extrude", "-e", ctx.extrude)
-		IA_STR("--format", "-f", format_data) 
-		IA_STR("--color", "-c", format_data) 
-		IA_STR("--scale", "-s", scale);
+		IA_INT("--max-width", "-w", ctx.maxWidth)
+		IA_INT("--max-height", "-h", ctx.maxHeight)
+		IA_STR("--scale", "-s", scale)
+		IA_STR("--color", "-c", format_data)
+		IA_FLAG("--unique", "-u", ctx.unique)
+		IA_FLAG("--multipack", "-m", ctx.allowMultipack)
+		IA_FLAG("--force-pot", "-2", ctx.forcePOT)
+		IA_FLAG("--force-squared", "-sq", ctx.forceSquared)
 		IA_FLAG("--verbose", "-v", ctx.verbose)
 	IA_END
 
@@ -573,6 +598,10 @@ int main(int argc, char *argv[]) {
 	} else {
 		printf("Bad scale \"%s\"\n", scale);
 		return 1;
+	}
+
+	if (ctx.maxWidth > 0 || ctx.maxHeight > 0) {
+		if (ctx.verbose) printf("Size constraints: %d x %d\n", ctx.maxWidth, ctx.maxHeight);
 	}
 
 	get_images_data(&ctx, imagesPath);

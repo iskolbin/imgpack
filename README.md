@@ -22,19 +22,21 @@ This will create `imgpack` command-line tool which can be used like:
 
 where options are:
 
-| Key         |    | Value   | Description
-|-------------|----|---------|----------------------------------------------
-| --data      | -d | string  | output file path, if ommited `stdout` is used
-| --image     | -i | string  | output image path
-| --format    | -f | string  | output atlas data format
-| --trim      | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255
-| --padding   | -p | int     | adds transparent padding
-| --force-pot | -2 |         | force power of two texture output
-| --exturde   | -e | int     | adds copied pixels on image borders, which helps with texture bleeding
-| --scale     | -s | int/int | scaling ratio int form "A/B" or just "K"
-| --unique    | -u |         | remove identical images (after trimming)
-| --verbose   | -v |         | print debug messages during the packing process
-| --help      | -? |         | prints this memo
+| Key          |    | Value   | Description
+|--------------|----|---------|----------------------------------------------
+| --data       | -d | string  | output file path, if ommited `stdout` is used
+| --image      | -i | string  | output image path (NEEDED)
+| --format     | -f | string  | output atlas data format
+| --trim       | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255
+| --padding    | -p | int     | adds transparent padding
+| --exturde    | -e | int     | adds copied pixels on image borders, which helps with texture bleeding
+| --max-width  | -w | int     | maximum atlas width
+| --max-height | -h | int     | maximum atlas height
+| --scale      | -s | int/int | scaling ratio int form "A/B" or just "K"
+| --unique     | -u |         | remove identical images (after trimming)
+| --force-pot  | -2 |         | force power of two texture output
+| --verbose    | -v |         | print debug messages during the packing process
+| --help       | -? |         | prints this memo
 
 Output atlas formats
 --------------------
