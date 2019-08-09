@@ -52,6 +52,13 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	}
 	fprintf(f, "};\n\n");
 
+	fprintf(f, "static const Vector2 %sOrigin[%d] = {\n", name, ctx->size);
+	for (int i = 0; i < ctx->size; i++) {
+		struct stbrp_rect frame = get_frame_rect(ctx, i);
+		fprintf(f, "  {%d, %d},\t/* %d (%s) */\n", frame.w/2 - ctx->images[i].source.x, frame.h/2 - ctx->images[i].source.h, i, ctx->images[i].path);
+	}
+	fprintf(f, "};\n\n");
+
 	fprintf(f, "Texture %sTexture = {0};\n\n", name);
 
 	fprintf(f, "void %sLoad(void) {\n", name);
@@ -63,14 +70,16 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	fprintf(f, "  %sTexture = (Texture) {0};\n", name);
 	fprintf(f, "}\n\n");
 
-	fprintf(f, "void %sDrawEx(enum %sIds id, float x, float y, float xscl, float yscl, float rot, Color color) {\n", name, name);
-	fprintf(f, "  Rectangle dest = %sFrame[id];\n", name);
-	fprintf(f, "  Vector2 offset = %sOffset[id];\n", name);
-	fprintf(f, "  Vector2 origin = %sSourceSize[id];\n", name);
-	fprintf(f, "  float w = dest.width * xscl, h = dest.height * yscl;\n");
-	fprintf(f, "  origin.x = 0.5*(origin.x+w-dest.width); origin.y = 0.5*(origin.y+h-dest.height);\n");
-	fprintf(f, "  dest.x = x + offset.x; dest.y = y + offset.y; dest.width *= xscl; dest.height *= yscl;\n");
-	fprintf(f, "  DrawTexturePro(%sTexture, %sFrame[id], dest, origin, rot, color);\n", name, name);
+	fprintf(f, "void %sDrawEx2(enum %sIds id, float x, float y, float rotation, float xscl, float yscl, Color color) {\n", name, name);
+	fprintf(f, "  Rectangle sourceRec = %sFrame[id];\n", name);
+	fprintf(f, "  Vector2 origin = %sOrigin[id];\n", name);
+	fprintf(f, "  origin.x *= xscl; origin.y *= yscl;\n");
+	fprintf(f, "  Rectangle destRec = {x, y, sourceRec.width*xscl, sourceRec.height*yscl};\n");
+	fprintf(f, "  DrawTexturePro(%sTexture, %sFrame[id], destRec, origin, rotation, color);\n", name, name);
+	fprintf(f, "}\n\n");
+
+	fprintf(f, "void %sDrawEx(enum %sIds id, Vector2 position, float rotation, float scale, Color tint) {\n", name, name);
+	fprintf(f, "  %sDrawEx2(id, position.x, position.y, rotation, scale, scale, tint);\n", name);
 	fprintf(f, "}\n\n");
 
 	fprintf(f, "void %sDraw(enum %sIds id, float x, float y, Color color) {\n", name, name);
