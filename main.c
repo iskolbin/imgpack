@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.8.2
+ * ImgPack -- simple texture packer v0.8.3
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -324,22 +324,22 @@ static int pack_images(struct ImgPackContext *ctx) {
 			assumed_side_size = ctx->sideGrowCoefficient*assumed_side_size;
 		}
 
-		// TODO wrong logic, but its pointless to fix without supporting non square atlases
+		// TODO Wrong logic, we need non-square textures implementation
+		if ((ctx->maxWidth > 0 && assumed_side_size >= ctx->maxWidth) ||
+				(ctx->maxHeight > 0 && assumed_side_size >= ctx->maxHeight)) {
+			printf("Exceeded max size constraints %d x %d\n", ctx->maxWidth, ctx->maxHeight);
+			return 1;
+		}
+
 		if (ctx->maxWidth > 0) {
-			if (ctx->width >= ctx->maxWidth) {
-				if (ctx->verbose) printf("Exceeded max width constraint %d\n", ctx->maxWidth);
-				return 1;
-			} else {
+			if (ctx->width < ctx->maxWidth) {
 				ctx->width = ctx->maxWidth > assumed_side_size ? assumed_side_size : ctx->maxWidth;
 			}
 		} else {
 			ctx->width = assumed_side_size;
 		}
 		if (ctx->maxHeight > 0) {
-			if (ctx->height >= ctx->maxHeight) {
-				if (ctx->verbose) printf("Exceeded max height constraint %d\n", ctx->maxHeight);
-				return 1;
-			} else {
+			if (ctx->height < ctx->maxHeight) {
 				ctx->height = ctx->maxHeight > assumed_side_size ? assumed_side_size : ctx->maxHeight;
 			}
 		} else {
