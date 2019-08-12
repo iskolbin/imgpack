@@ -54,8 +54,9 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 
 	fprintf(f, "static const Vector2 %sOrigin[%d] = {\n", name, ctx->size);
 	for (int i = 0; i < ctx->size; i++) {
-		struct stbrp_rect frame = get_frame_rect(ctx, i);
-		fprintf(f, "  {%d, %d},\t/* %d (%s) */\n", frame.w/2 - ctx->images[i].source.x, frame.h/2 - ctx->images[i].source.h, i, ctx->images[i].path);
+		//struct stbrp_rect frame = get_frame_rect(ctx, i);
+		struct stbrp_rect source = ctx->images[i].source;
+		fprintf(f, "  {%d, %d},\t/* %d (%s) */\n", source.w/2 - source.x, source.h/2 - source.y, i, ctx->images[i].path);
 	}
 	fprintf(f, "};\n\n");
 
@@ -70,16 +71,12 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	fprintf(f, "  %sTexture = (Texture) {0};\n", name);
 	fprintf(f, "}\n\n");
 
-	fprintf(f, "void %sDrawEx2(enum %sIds id, float x, float y, float rotation, float xscl, float yscl, Color color) {\n", name, name);
+	fprintf(f, "void %sDrawCenter(enum %sIds id, float x, float y, float rotation, float xscl, float yscl, Color color) {\n", name, name);
 	fprintf(f, "  Rectangle sourceRec = %sFrame[id];\n", name);
 	fprintf(f, "  Vector2 origin = %sOrigin[id];\n", name);
 	fprintf(f, "  origin.x *= xscl; origin.y *= yscl;\n");
 	fprintf(f, "  Rectangle destRec = {x, y, sourceRec.width*xscl, sourceRec.height*yscl};\n");
 	fprintf(f, "  DrawTexturePro(%sTexture, %sFrame[id], destRec, origin, rotation, color);\n", name, name);
-	fprintf(f, "}\n\n");
-
-	fprintf(f, "void %sDrawEx(enum %sIds id, Vector2 position, float rotation, float scale, Color tint) {\n", name, name);
-	fprintf(f, "  %sDrawEx2(id, position.x, position.y, rotation, scale, scale, tint);\n", name);
 	fprintf(f, "}\n\n");
 
 	fprintf(f, "void %sDraw(enum %sIds id, float x, float y, Color color) {\n", name, name);

@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.8.3
+ * ImgPack -- simple texture packer v0.8.4
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
