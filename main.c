@@ -87,6 +87,7 @@ struct ImgPackContext {
 
 	char *outputImagePath;
 	char *outputDataPath;
+	char *name;
 
 	int argc;
 	char **argv;
@@ -546,6 +547,7 @@ int main(int argc, char *argv[]) {
 		"|--------------|----|---------|----------------------------------------------\n"
 		"| --data       | -d | string  | output file path, if ommited `stdout` is used\n"
 		"| --image      | -i | string  | output image path (NEEDED)\n"
+		"| --name       | -n | string  | name\n"
 		"| --format     | -f | string  | output atlas data format\n"
 		"| --trim       | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255\n"
 		"| --padding    | -p | int     | adds transparent padding\n"
@@ -559,6 +561,7 @@ int main(int argc, char *argv[]) {
 		"| --help       | -? |         | prints this memo\n\n")
 		IA_STR("--data", "-d", ctx.outputDataPath)
 		IA_STR("--image", "-i", ctx.outputImagePath)
+		IA_STR("--name", "-n", ctx.name)
 		IA_STR("--format", "-f", format_data)
 		IA_INT("--trim", "-t", ctx.trimThreshold)
 		IA_INT("--padding", "-p", ctx.padding)
