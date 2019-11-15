@@ -45,13 +45,13 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	fprintf(f, "%s_DEF void %s_Unload(void);\n", name, name);
 	fprintf(f, "%s_DEF int %s_Draw(enum %s_Ids id, float x, float y, Color color, int anchor, const Vector2 *point);\n", name, name, name);
 	fprintf(f, "%s_DEF int %s_DrawEx(enum %s_Ids id, float x, float y, float rotation, float scale, Color color, int anchor, const Vector2 *point);\n", name, name, name);
-	fprintf(f, "%s_DEF Texture %s_GetTexture(void);\n", name, name)
-	fprintf(f, "%s_DEF const Vector2 %s_GetScale(void);\n", name, name)
-	fprintf(f, "%s_DEF const Rectangle %s_GetFrame(enum %s_Ids id);\n", name, name, name)
-	fprintf(f, "%s_DEF const Vector2 %s_GetOffset(enum %s_Ids id);\n", name, name, name)
-	fprintf(f, "%s_DEF const Vector2 %s_GetSourceSize(enum %s_Ids id);\n", name, name, name)
-	fprintf(f, "%s_DEF const Vector2 %s_GetOrigin(enum %s_Ids id);\n", name, name, name)
-	fprintf(f, "\n")
+	fprintf(f, "%s_DEF Texture %s_GetTexture(void);\n", name, name);
+	fprintf(f, "%s_DEF const Vector2 %s_GetScale(void);\n", name, name);
+	fprintf(f, "%s_DEF const Rectangle %s_GetFrame(enum %s_Ids id);\n", name, name, name);
+	fprintf(f, "%s_DEF const Vector2 %s_GetOffset(enum %s_Ids id);\n", name, name, name);
+	fprintf(f, "%s_DEF const Vector2 %s_GetSourceSize(enum %s_Ids id);\n", name, name, name);
+	fprintf(f, "%s_DEF const Vector2 %s_GetOrigin(enum %s_Ids id);\n", name, name, name);
+	fprintf(f, "\n");
 	fprintf(f, "#endif\n\n");
 
 	fprintf(f, "#ifdef %s_IMPLEMENTATAION\n", name);
