@@ -37,7 +37,7 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	fprintf(f, "#ifndef CENTER\n#define CENTER 0\n#endif\n");
 	fprintf(f, "#ifndef LEFT\n#define LEFT 1\n#endif\n");
 	fprintf(f, "#ifndef RIGHT\n#define RIGHT 2\n#endif\n");
-	fprintf(f, "#ifndef TOP\n#define TOP 4\n");
+	fprintf(f, "#ifndef TOP\n#define TOP 4\n#endif\n");
 	fprintf(f, "#ifndef BOTTOM\n#define BOTTOM 8\n#endif\n");
 	fprintf(f, "#endif\n");
 
