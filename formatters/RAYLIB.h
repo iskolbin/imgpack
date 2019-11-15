@@ -136,7 +136,6 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 
 	fprintf(f, "#endif\n");
 	fprintf(f, "#endif\n");
-	fprintf(f, "#endif\n");
 
 	return 0;
 }
