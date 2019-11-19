@@ -1,5 +1,5 @@
 /*
- * ImgPack -- simple texture packer v0.8.4
+ * ImgPack -- simple texture packer v0.9.0
  *
  * Author: Ilya Kolbin
  * Source: github.com:iskolbin/imgpack
@@ -53,6 +53,7 @@ enum ImgPackColorFormat {
 };
 
 struct ImgPackImage {
+	int id;
 	char *path;
 	uint64_t hash;
 	stbrp_rect source;
@@ -105,10 +106,11 @@ static int is_image_rotated(struct ImgPackContext *ctx, int id) {
 static int is_image_trimmed(struct ImgPackContext *ctx, int id) {
 	if (id >= 0 && id < ctx->size) {
 		int d = ctx->padding + ctx->extrude;
+		int rid = ctx->images[id].id;
 		return ctx->images[id].source.x != 0 ||
 			ctx->images[id].source.y != 0 ||
-			ctx->images[id].source.w != ctx->packingRects[id].w-2*d ||
-			ctx->images[id].source.h != ctx->packingRects[id].h-2*d; 
+			ctx->images[id].source.w != ctx->packingRects[rid].w-2*d ||
+			ctx->images[id].source.h != ctx->packingRects[rid].h-2*d;
 	} else {
 		return -1;
 	}
@@ -125,10 +127,11 @@ static struct stbrp_rect get_frame_rect(struct ImgPackContext *ctx, int id) {
 			return get_frame_rect(ctx, ctx->images[id].copyOf);
 		}
 		int d = ctx->padding + ctx->extrude;
-		frame.x = ctx->packingRects[id].x + d;
-		frame.y = ctx->packingRects[id].y + d;
-		frame.w = ctx->packingRects[id].w - 2*d;
-		frame.h = ctx->packingRects[id].h - 2*d;
+		int rid = ctx->images[id].id;
+		frame.x = ctx->packingRects[rid].x + d;
+		frame.y = ctx->packingRects[rid].y + d;
+		frame.w = ctx->packingRects[rid].w - 2*d;
+		frame.h = ctx->packingRects[rid].h - 2*d;
 	}
 	return frame;
 }
@@ -223,6 +226,7 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 	char *path = ISLIP_MALLOC(strlen(img_path)+1);
 	strcpy(path, img_path);
 	ctx->images[id] = (struct ImgPackImage) {
+		.id = id,
 		.path = path,
 		.hash = hash,
 		.source = (stbrp_rect) {.x = minX, .y = minY, .w = width, .h = height},
@@ -375,7 +379,8 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 	unsigned char *output_data = ISLIP_MALLOC(4 * ctx->width * ctx->height);
 	if (ctx->verbose) printf("Drawing atlas image to \"%s\"\n", ctx->outputImagePath);
 	for (int i = 0; i < ctx->size; i++) {
-		struct stbrp_rect rect = ctx->packingRects[i];
+		int rid = ctx->images[i].id;
+		struct stbrp_rect rect = ctx->packingRects[rid];
 		if (rect.w == 0 || rect.h == 0) continue;
 		int x0 = ctx->images[i].source.x, y0 = ctx->images[i].source.y;
 		int d = ctx->padding + ctx->extrude;
@@ -527,6 +532,14 @@ static int parse_scale(struct ImgPackContext *ctx, const char *scale) {
 	}
 }
 
+static int compare_images(const void *a, const void *b) {
+	return strcmp(((struct ImgPackImage *)a)->path, ((struct ImgPackImage *)b)->path);
+}
+
+static void sort_images(struct ImgPackContext *ctx) {
+	qsort(ctx->images, ctx->size, sizeof(struct ImgPackImage), compare_images);
+}
+
 int main(int argc, char *argv[]) {
 	struct ImgPackContext ctx = {
 		.scaleNumerator = 1,
@@ -540,6 +553,7 @@ int main(int argc, char *argv[]) {
 	char *format_data = "C";
 	char *format_color = "RGBA8888";
 	char *scale = "1";
+	int sorting = 0;
 	IA_BEGIN(argc, argv, "--help", "-?", "ImgPack texture packer v0.8\n"
 		"Copyright 2019 Ilya Kolbin <iskolbin@gmail.com>\n\n"
 		"Usage : imgpack <OPTIONS> <images folder>\n\n"
@@ -554,9 +568,10 @@ int main(int argc, char *argv[]) {
 		"| --exturde    | -e | int     | adds copied pixels on image borders, which helps with texture bleeding\n"
 		"| --max-width  | -w | int     | maximum atlas width\n"
 		"| --max-height | -h | int     | maximum atlas height\n"
-		"| --scale      | -s | int/int | scaling ratio int form \"A/B\" or just \"K\"\n"
+		"| --scale      | -x | int/int | scaling ratio int form \"A/B\" or just \"K\"\n"
 		"| --unique     | -u |         | remove identical images (after trimming)\n"
 		"| --force-pot  | -2 |         | force power of two texture output\n"
+		"| --sort       | -s |         | sorting by path name (ascending)\n"
 		"| --verbose    | -v |         | print debug messages during the packing process\n"
 		"| --help       | -? |         | prints this memo\n\n")
 		IA_STR("--data", "-d", ctx.outputDataPath)
@@ -572,6 +587,7 @@ int main(int argc, char *argv[]) {
 		IA_STR("--color", "-c", format_data)
 		IA_FLAG("--unique", "-u", ctx.unique)
 		IA_FLAG("--multipack", "-m", ctx.allowMultipack)
+		IA_FLAG("--sort", "-s", sorting)
 		IA_FLAG("--force-pot", "-2", ctx.forcePOT)
 		IA_FLAG("--force-squared", "-sq", ctx.forceSquared)
 		IA_FLAG("--verbose", "-v", ctx.verbose)
@@ -614,6 +630,11 @@ int main(int argc, char *argv[]) {
 	} else {
 		printf("Cannot pack images\n");
 		return 1;
+	}
+
+	if (sorting) {
+		if (ctx.verbose) printf("Sorting images\n");
+		sort_images(&ctx);
 	}
 
 	if (write_atlas_data(&ctx)) return 1;

@@ -26,6 +26,7 @@ where options are:
 |--------------|----|---------|----------------------------------------------
 | --data       | -d | string  | output file path, if ommited `stdout` is used
 | --image      | -i | string  | output image path (NEEDED)
+| --name       | -n | string  | name
 | --format     | -f | string  | output atlas data format
 | --trim       | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255
 | --padding    | -p | int     | adds transparent padding
@@ -35,6 +36,7 @@ where options are:
 | --scale      | -s | int/int | scaling ratio int form "A/B" or just "K"
 | --unique     | -u |         | remove identical images (after trimming)
 | --force-pot  | -2 |         | force power of two texture output
+| --sort       | -s |         | sorting by path name (ascending)
 | --verbose    | -v |         | print debug messages during the packing process
 | --help       | -? |         | prints this memo
 
