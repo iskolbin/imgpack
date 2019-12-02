@@ -111,18 +111,17 @@ static int imgpack_formatter_RAYLIB(struct ImgPackContext *ctx, FILE *f) {
 	fprintf(f, "}\n\n");
 
 	fprintf(f, "int %s_DrawEx(enum %s_Ids id, float x, float y, float rotation, float scale, Color color, int anchor, const Vector2 *point) {\n", name, name);
-	fprintf(f, "  Rectangle sourceRec = %s_Frame[id];\n", name);
+	fprintf(f, "  Vector2 sourceSize = %s_SourceSize[id];\n", name);
 	fprintf(f, "  Vector2 origin = %s_Origin[id];\n", name);
-	fprintf(f, "  if (anchor & 1) origin.x = 0; else if (anchor & 2) origin.x = %s_SourceSize[id].x;\n", name);
-	fprintf(f, "  if (anchor & 4) origin.y = 0; else if (anchor & 8) origin.y = %s_SourceSize[id].y;\n", name);
-	fprintf(f, "  origin.x *= scale; origin.y *= scale;\n");
-	fprintf(f, "  Rectangle destRec = {x, y, sourceRec.width * scale, sourceRec.height * scale};\n");
-	fprintf(f, "  DrawTexturePro(%s_Texture, %s_Frame[id], destRec, origin, rotation, color);\n", name, name);
-	fprintf(f, " 	if (point) {\n");
-	fprintf(f, " 	  destRec.x -= origin.x;\n");
-	fprintf(f, " 	  destRec.y -= origin.y;\n");
-	fprintf(f, "    return CheckCollisionPointRec(*point, destRec);\n");
-	fprintf(f, " 	} else {\n");
+	fprintf(f, "  x += (anchor & 1 ? 0 : anchor & 2 ? -%s_SourceSize[id].x : -%s_Origin[id].x - %s_Offset[id].x);\n", name, name, name);
+	fprintf(f, "  y += (anchor & 4 ? 0 : anchor & 8 ? -%s_SourceSize[id].y : -%s_Origin[id].y - %s_Offset[id].y);\n", name, name, name);
+	fprintf(f, "  origin.x *= scale; origin.y *= scale;
+	fprintf(f, "  Rectangle destRec = {x + sourceSize.x/2, y + sourceSize.y/2, %s_Frame[id].width * scale, %s_Frame[id].height * scale};\n", name, name, name, name);
+	fprintf(f, "  DrawTexturePro(%s_Texture, %s_Frame[id], destRec, (Vector2){0,0}, 0, color);\n", name, name);
+	fprintf(f, "  if (point) {\n");
+	fprintf(f, "    Rectangle collisionRec = {x, y, %s_SourceSize[id].x, %s_SourceSize[id].y};\n", name, name);
+	fprintf(f, "    return CheckCollisionPointRec(*point, collisionRec);\n");
+	fprintf(f, "  } else {\n");
 	fprintf(f, "    return 0;\n");
 	fprintf(f, "  }\n");
 	fprintf(f, "}\n\n");
