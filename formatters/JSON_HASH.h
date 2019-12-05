@@ -13,7 +13,7 @@ static int imgpack_formatter_JSON_HASH(struct ImgPackContext *ctx, FILE *f) {
 	}
 	fprintf(f, "\"meta\": {\n");
 	fprintf(f, "\t\"app\": \"https://github.com/iskolbin/imgpack\",\n");
-	fprintf(f, "\t\"version\": \"1.0\",\n");
+	fprintf(f, "\t\"version\": \"%s\",\n", ISLIP_VERSION);
 	fprintf(f, "\t\"image\": \"%s\",\n", ctx->outputImagePath);
 	fprintf(f, "\t\"format\": \"%s\",\n", get_output_image_format(ctx));
 	fprintf(f, "\t\"size\": {\"w\":%d,\"h\":%d},\n", ctx->width, ctx->height);
