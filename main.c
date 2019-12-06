@@ -625,10 +625,7 @@ int main(int argc, char *argv[]) {
 		if (ctx.verbose) printf("Size constraints: %d x %d\n", ctx.maxWidth, ctx.maxHeight);
 	}
 
-	stbi_uc *blank = ISLIP_MALLOC(4 * sizeof(*blank));
-	blank[0] = blank[1] = blank[2] = blank[3] = 0;
-	add_image_data(&ctx, blank, "_", 1, 1);
-	get_images_data(&ctx, imagesPath);
+	get_images_data(&ctx, imagesPath);	
 
 	if (!pack_images(&ctx)) {
 		if (ctx.verbose) printf("Images have been packed\n");
