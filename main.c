@@ -1,4 +1,4 @@
-#define ISLIP_VERSION "0.10.0"
+#define ISLIP_VERSION "0.10.1"
 
 /*
  * ImgPack -- simple texture packer
@@ -569,9 +569,11 @@ int main(int argc, char *argv[]) {
 		"| --max-width  | -w | int     | maximum atlas width\n"
 		"| --max-height | -h | int     | maximum atlas height\n"
 		"| --scale      | -x | int/int | scaling ratio int form \"A/B\" or just \"K\"\n"
+		"| --color      | -c | string  | format (only RGBA8888 currently supported)\n"
 		"| --unique     | -u |         | remove identical images (after trimming)\n"
 		"| --force-pot  | -2 |         | force power of two texture output\n"
 		"| --sort       | -s |         | sorting by path name (ascending)\n"
+		//"| --multipack  | -m |         | allow multipacking\n"
 		"| --verbose    | -v |         | print debug messages during the packing process\n"
 		"| --help       | -? |         | prints this memo\n\n")
 		IA_STR("--data", "-d", ctx.outputDataPath)
@@ -586,11 +588,11 @@ int main(int argc, char *argv[]) {
 		IA_STR("--scale", "-s", scale)
 		IA_STR("--color", "-c", format_data)
 		IA_FLAG("--unique", "-u", ctx.unique)
-		IA_FLAG("--multipack", "-m", ctx.allowMultipack)
-		IA_FLAG("--sort", "-s", sorting)
 		IA_FLAG("--force-pot", "-2", ctx.forcePOT)
-		IA_FLAG("--force-squared", "-sq", ctx.forceSquared)
+		IA_FLAG("--sort", "-s", sorting)
+		//IA_FLAG("--multipack", "-m", ctx.allowMultipack)
 		IA_FLAG("--verbose", "-v", ctx.verbose)
+		IA_FLAG("--force-squared", "-sq", ctx.forceSquared)
 	IA_END
 
 	if (!ctx.outputImagePath) {
@@ -623,6 +625,9 @@ int main(int argc, char *argv[]) {
 		if (ctx.verbose) printf("Size constraints: %d x %d\n", ctx.maxWidth, ctx.maxHeight);
 	}
 
+	stbi_uc *blank = ISLIP_MALLOC(4 * sizeof(*blank));
+	blank[0] = blank[1] = blank[2] = blank[3] = 0;
+	add_image_data(&ctx, blank, "_", 1, 1);
 	get_images_data(&ctx, imagesPath);
 
 	if (!pack_images(&ctx)) {
