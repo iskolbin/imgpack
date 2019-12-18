@@ -125,11 +125,11 @@ static const char *get_output_image_format(struct ImgPackContext *ctx) {
 static struct stbrp_rect get_frame_rect(struct ImgPackContext *ctx, int id) {
 	struct stbrp_rect frame = {0};
 	if (id >= 0 && id < ctx->size) {
-		if (ctx->images[id].copyOf >= 0) {
-			return get_frame_rect(ctx, ctx->images[id].copyOf);
-		}
 		int d = ctx->padding + ctx->extrude;
 		int rid = ctx->images[id].id;
+		if (ctx->images[id].copyOf >= 0) {
+			rid = ctx->images[id].copyOf;
+		}
 		frame.x = ctx->packingRects[rid].x + d;
 		frame.y = ctx->packingRects[rid].y + d;
 		frame.w = ctx->packingRects[rid].w - 2*d;
@@ -179,7 +179,7 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 		int resized_height = ctx->scaleNumerator * height / ctx->scaleDenominator;
 		stbi_uc *resized_data = ISLIP_MALLOC(sizeof(*resized_data) * resized_width * resized_height * 4);
 		stbir_resize_uint8(data, width, height, 0,  resized_data, resized_width, resized_height, 0, 4);
-		if (ctx->verbose) printf("  Resize \"%s\" (%d, %d) => (%d, %d)\n", img_path, width, height, resized_width, resized_height);
+		if (ctx->verbose) printf("//  Resize \"%s\" (%d, %d) => (%d, %d)\n", img_path, width, height, resized_width, resized_height);
 		stbi_image_free(data);
 		data = resized_data;
 		width = resized_width;
@@ -221,7 +221,7 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 			hash = (hash ^ data[4*(y*width+x)+3]) * 0x100000001b3ULL;
 		}
 	}
-	if (ctx->verbose) printf("  Hash of \"%s\" is %" PRIx64 "\n", img_path, hash);
+	if (ctx->verbose) printf("//  Hash of \"%s\" is %" PRIx64 "\n", img_path, hash);
 
 	char *path = ISLIP_MALLOC(strlen(img_path)+1);
 	strcpy(path, img_path);
@@ -261,22 +261,22 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 			}
 		}
 	}
-	if (ctx->verbose) printf("  Added \"%s\" %dx%d(trimmed to %dx%d)\n", path, width, height, maxX - minX + 1, maxY - minY + 1);
+	if (ctx->verbose) printf("//  Added \"%s\" %dx%d(trimmed to %dx%d)\n", path, width, height, maxX - minX + 1, maxY - minY + 1);
 }
 
 static int get_images_data(struct ImgPackContext *ctx, const char *path) {
 	int count = 0;
 	cf_dir_t dir;
 	if (cf_dir_open(&dir, path)) {
-		if (ctx->verbose) printf("Reading images data from \"%s\" directory\n", path);
+		if (ctx->verbose) printf("// Reading images data from \"%s\" directory\n", path);
 		while(dir.has_next) {
 			cf_file_t file;
 			cf_read_file(&dir, &file);
 			if (file.is_dir && file.name[0] != '.') {
-				if (ctx->verbose) printf("  Traverse %s\n", file.name);
+				if (ctx->verbose) printf("//  Traverse %s\n", file.name);
 				count += get_images_data(ctx, file.path);
 			} else if (file.is_reg) {
-				if (ctx->verbose) printf("  Reading %s\n", file.name);
+				if (ctx->verbose) printf("//  Reading %s\n", file.name);
 				int width, height, channels;
 				stbi_uc *data = stbi_load(file.path, &width, &height, &channels, 4);
 				if (data) {
@@ -287,7 +287,7 @@ static int get_images_data(struct ImgPackContext *ctx, const char *path) {
 			cf_dir_next(&dir);
 		}
 		cf_dir_close(&dir);
-		if (ctx->verbose) printf("From %s added %d images\n", path, count);
+		if (ctx->verbose) printf("// From %s added %d images\n", path, count);
 	}
 	return count;
 }
@@ -309,7 +309,7 @@ static int pack_images(struct ImgPackContext *ctx) {
 	for (int i = 0; i < ctx->size; i++) {
 		occupied_area += ((side_add+ctx->packingRects[i].w)*(side_add+ctx->packingRects[i].h));
 	}
-	if (ctx->verbose) printf("Occupied area is %d\n", occupied_area);
+	if (ctx->verbose) printf("// Occupied area is %d\n", occupied_area);
 	if (occupied_area <= 0) return 1;
 	int assumed_side_size = (int)sqrt((double)occupied_area);
 	ctx->width = assumed_side_size;
@@ -351,7 +351,7 @@ static int pack_images(struct ImgPackContext *ctx) {
 			ctx->height = assumed_side_size;
 		}
 
-		if (ctx->verbose) printf("Trying to pack %d images into %dx%d\n", ctx->size, assumed_side_size, assumed_side_size);
+		if (ctx->verbose) printf("// Trying to pack %d images into %dx%d\n", ctx->size, assumed_side_size, assumed_side_size);
 		stbrp_init_target(&rp_ctx, assumed_side_size, assumed_side_size, nodes, ctx->size);
 	} while (!stbrp_pack_rects(&rp_ctx, ctx->packingRects, ctx->size));
 	ISLIP_FREE(nodes);
@@ -365,19 +365,19 @@ static int write_atlas_data(struct ImgPackContext *ctx) {
 	}
 	int status = 1;
 	if (output_file) {
-		if (ctx->verbose) printf("Writing description data to \"%s\"\n", ctx->outputDataPath ? ctx->outputDataPath : "stdout");
+		if (ctx->verbose) printf("// Writing description data to \"%s\"\n", ctx->outputDataPath ? ctx->outputDataPath : "stdout");
 		status = ctx->formatter(ctx, output_file);
-		if (ctx->verbose) printf("Written\n");
+		if (ctx->verbose) printf("// Written\n");
 		if (output_file != stdout) fclose(output_file);
 	} else {
-		printf("Cannot open for writing \"%s\"", ctx->outputDataPath);
+		printf("// Cannot open for writing \"%s\"", ctx->outputDataPath);
 	}
 	return status;
 }
 
 static int write_atlas_image(struct ImgPackContext *ctx) {
 	unsigned char *output_data = ISLIP_MALLOC(4 * ctx->width * ctx->height);
-	if (ctx->verbose) printf("Drawing atlas image to \"%s\"\n", ctx->outputImagePath);
+	if (ctx->verbose) printf("// Drawing atlas image to \"%s\"\n", ctx->outputImagePath);
 	for (int i = 0; i < ctx->size; i++) {
 		int rid = ctx->images[i].id;
 		struct stbrp_rect rect = ctx->packingRects[rid];
@@ -386,7 +386,7 @@ static int write_atlas_image(struct ImgPackContext *ctx) {
 		int d = ctx->padding + ctx->extrude;
 		int w = ctx->images[i].source.w, h = ctx->images[i].source.h;
 		stbi_uc *image_data = ctx->images[i].data;
-		if (ctx->verbose) printf(" Drawing %s\n", ctx->images[i].path);
+		if (ctx->verbose) printf("// Drawing %s\n", ctx->images[i].path);
 		for (int y = 0; y < rect.h-2*d; y++) {
 			for (int x = 0; x < rect.w-2*d; x++) {
 				int output_offset = 4*(x+rect.x+d + (y+rect.y+d)*ctx->width);
@@ -601,41 +601,41 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (!parse_data_format(&ctx, format_data)) {
-		if (ctx.verbose) printf("Using data format %s\n", format_data);
+		if (ctx.verbose) printf("// Using data format %s\n", format_data);
 	} else {
 		printf("Bad data format \"%s\"\n", format_data);
 		return 1;
 	}
 
 	if (!parse_data_color(&ctx, format_color)) {
-		if (ctx.verbose) printf("Using color format %s\n", format_color);
+		if (ctx.verbose) printf("// Using color format %s\n", format_color);
 	} else {
 		printf("Bad color format \"%s\"\n", format_color);
 		return 1;
 	}
 
 	if (!parse_scale(&ctx, scale)) {
-		if (ctx.verbose) printf("Set scaling to %d/%d\n", ctx.scaleNumerator, ctx.scaleDenominator);
+		if (ctx.verbose) printf("// Set scaling to %d/%d\n", ctx.scaleNumerator, ctx.scaleDenominator);
 	} else {
 		printf("Bad scale \"%s\"\n", scale);
 		return 1;
 	}
 
 	if (ctx.maxWidth > 0 || ctx.maxHeight > 0) {
-		if (ctx.verbose) printf("Size constraints: %d x %d\n", ctx.maxWidth, ctx.maxHeight);
+		if (ctx.verbose) printf("// Size constraints: %d x %d\n", ctx.maxWidth, ctx.maxHeight);
 	}
 
 	get_images_data(&ctx, imagesPath);	
 
 	if (!pack_images(&ctx)) {
-		if (ctx.verbose) printf("Images have been packed\n");
+		if (ctx.verbose) printf("// Images have been packed\n");
 	} else {
 		printf("Cannot pack images\n");
 		return 1;
 	}
 
 	if (sorting) {
-		if (ctx.verbose) printf("Sorting images\n");
+		if (ctx.verbose) printf("// Sorting images\n");
 		sort_images(&ctx);
 	}
 
