@@ -562,7 +562,7 @@ int main(int argc, char *argv[]) {
 		"| --data       | -d | string  | output file path, if ommited `stdout` is used\n"
 		"| --image      | -i | string  | output image path (NEEDED)\n"
 		"| --name       | -n | string  | name\n"
-		"| --format     | -f | string  | output atlas data format\n"
+		"| --format     | -f | string  | output atlas data format (CSV, JSON_HASH, JSON_ARRAY, RAYLIB)\n"
 		"| --trim       | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255\n"
 		"| --padding    | -p | int     | adds transparent padding\n"
 		"| --exturde    | -e | int     | adds copied pixels on image borders, which helps with texture bleeding\n"
