@@ -73,12 +73,12 @@ Outputs JSON formatted like TexturePacker does
 
 Outputs JSON formatted like TexturePacker does
 
+### CSV
 
 Todos
 -----
 
 * Multipacking
-* Not square output texture
 * Compressed output texture (DXT5?)
 * Memory allocation checks
 * Input error checking
