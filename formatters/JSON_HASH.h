@@ -2,7 +2,11 @@ static int imgpack_formatter_JSON_HASH(struct ImgPackContext *ctx, FILE *f) {
 	fprintf(f, "{\"frames\": {\n\n");
 	for (int i = 0; i < ctx->size; i++) {
 		struct stbrp_rect frame = get_frame_rect(ctx, i);
-		fprintf(f, "\"%s\":\n{\n", ctx->images[i].path);
+		switch (ctx->naming) {
+			case IMGPACK_FULL_PATH: fprintf(f, "\"%s\":\n{\n", ctx->images[i].path); break;
+			case IMGPACK_NAME_NO_EXT: fprintf(f, "\"%s\":\n{\n", ctx->images[i].name); break;
+			case IMGPACK_NAME_WITH_EXT: fprintf(f, "\"%s%s\":\n{\n", ctx->images[i].name, ctx->images[i].ext); break;
+		}
 		fprintf(f, "\t\"frame\": {\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d},\n", frame.x, frame.y, frame.w, frame.h);
 		fprintf(f, "\t\"rotated\": %s,\n", is_image_rotated(ctx, i) ? "true" : "false");
 		fprintf(f, "\t\"trimmed\": %s,\n", is_image_trimmed(ctx, i) ? "true" : "false");

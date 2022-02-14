@@ -10,7 +10,6 @@
  */
 
 #include <ctype.h>
-#include <math.h>
 #include <inttypes.h>
 
 #ifndef ISLIP_NOSTDLIB
@@ -54,9 +53,17 @@ enum ImgPackColorFormat {
 	IMGPACK_RGBA8888,
 };
 
+enum ImgPackNaming {
+	IMGPACK_NAME_WITH_EXT,
+	IMGPACK_NAME_NO_EXT,
+	IMGPACK_FULL_PATH,
+};
+
 struct ImgPackImage {
 	int id;
+	char *name;
 	char *path;
+	char *ext;
 	uint64_t hash;
 	stbrp_rect source;
 	stbi_uc *data;
@@ -65,6 +72,7 @@ struct ImgPackImage {
 
 struct ImgPackContext {
 	enum ImgPackColorFormat colorFormat;
+	enum ImgPackNaming naming;
 	int (*formatter)(struct ImgPackContext *ctx, FILE *output_file);
 	int forcePOT;
 	int forceSquared;
@@ -152,6 +160,14 @@ static int parse_data_format(struct ImgPackContext *ctx, const char *s) {
 	return 0;
 }
 
+static int parse_naming(struct ImgPackContext *ctx, const char *s) {
+	if (!strcmp(s, "FULL_PATH")) ctx->naming = IMGPACK_FULL_PATH;
+	else if (!strcmp(s, "NAME_NO_EXT")) ctx->naming = IMGPACK_NAME_NO_EXT;
+	else if (!strcmp(s, "NAME_WITH_EXT")) ctx->naming = IMGPACK_NAME_WITH_EXT;
+	else return 1;
+	return 0;
+}
+
 static int parse_data_color(struct ImgPackContext *ctx, const char *s) {
 	if (!strcmp(s, "RGBA8888")) ctx->colorFormat = IMGPACK_RGBA8888;
 	else return 1;
@@ -167,7 +183,8 @@ static void allocate_images_data(struct ImgPackContext *ctx) {
 	ctx->allocated = next_size;
 }
 
-static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char *img_path, int width, int height) {
+static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char *img_path,
+		const char *img_name, const char *img_ext, int width, int height) {
 	int id = ctx->size;
 	while (id >= ctx->allocated) {
 		allocate_images_data(ctx);
@@ -225,10 +242,20 @@ static void add_image_data(struct ImgPackContext *ctx, stbi_uc *data, const char
 
 	char *path = ISLIP_MALLOC(strlen(img_path)+1);
 	strcpy(path, img_path);
+	int name_len = strlen(img_name) - strlen(img_ext);
+	char *name = ISLIP_MALLOC(name_len + 1);
+	name[name_len] = '\0';
+	for (int i = 0; i < name_len; i++) {
+		name[i] = img_name[i];
+	}
+	char *ext = ISLIP_MALLOC(strlen(img_ext)+1);
+	strcpy(ext, img_ext);
 	ctx->images[id] = (struct ImgPackImage) {
 		.id = id,
 		.path = path,
 		.hash = hash,
+		.name = name,
+		.ext = ext,
 		.source = (stbrp_rect) {.x = minX, .y = minY, .w = width, .h = height},
 		.data = data,
 		.copyOf = -1,
@@ -280,7 +307,7 @@ static int get_images_data(struct ImgPackContext *ctx, const char *path) {
 				int width, height, channels;
 				stbi_uc *data = stbi_load(file.path, &width, &height, &channels, 4);
 				if (data) {
-					add_image_data(ctx, data, file.path, width, height);
+					add_image_data(ctx, data, file.path, file.name, file.ext, width, height);
 					count++;
 				}
 			}
@@ -553,6 +580,7 @@ int main(int argc, char *argv[]) {
 	char *format_data = "C";
 	char *format_color = "RGBA8888";
 	char *scale = "1";
+	char *naming = "NAME_WITH_EXT";
 	int sorting = 0;
 	IA_BEGIN(argc, argv, "--help", "-?", "ImgPack texture packer v0.8\n"
 		"Copyright 2019 Ilya Kolbin <iskolbin@gmail.com>\n\n"
@@ -563,6 +591,7 @@ int main(int argc, char *argv[]) {
 		"| --image      | -i | string  | output image path (NEEDED)\n"
 		"| --name       | -n | string  | name\n"
 		"| --format     | -f | string  | output atlas data format (CSV, JSON_HASH, JSON_ARRAY, RAYLIB)\n"
+		"| --naming     | -N | string  | frames naming for JSON_HASH/ARRAY: FULL_PATH, NAME_NO_EXT, NAME_WITH_EXT(default)\n"
 		"| --trim       | -t | int     | alpha threshold for trimming image with transparent border, should be 0-255\n"
 		"| --padding    | -p | int     | adds transparent padding\n"
 		"| --exturde    | -e | int     | adds copied pixels on image borders, which helps with texture bleeding\n"
@@ -580,6 +609,7 @@ int main(int argc, char *argv[]) {
 		IA_STR("--image", "-i", ctx.outputImagePath)
 		IA_STR("--name", "-n", ctx.name)
 		IA_STR("--format", "-f", format_data)
+		IA_STR("--naming", "-N", naming)
 		IA_INT("--trim", "-t", ctx.trimThreshold)
 		IA_INT("--padding", "-p", ctx.padding)
 		IA_INT("--extrude", "-e", ctx.extrude)
@@ -611,6 +641,13 @@ int main(int argc, char *argv[]) {
 		if (ctx.verbose) printf("// Using color format %s\n", format_color);
 	} else {
 		printf("Bad color format \"%s\"\n", format_color);
+		return 1;
+	}
+
+	if (!parse_naming(&ctx, naming)) {
+		if (ctx.verbose) printf("// Using naming %s\n", naming);
+	} else {
+		printf("Bad naming \"%s\"\n", naming);
 		return 1;
 	}
 
