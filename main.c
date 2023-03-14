@@ -615,7 +615,7 @@ int main(int argc, char *argv[]) {
 		IA_INT("--extrude", "-e", ctx.extrude)
 		IA_INT("--max-width", "-w", ctx.maxWidth)
 		IA_INT("--max-height", "-h", ctx.maxHeight)
-		IA_STR("--scale", "-s", scale)
+		IA_STR("--scale", "-x", scale)
 		IA_STR("--color", "-c", format_data)
 		IA_FLAG("--unique", "-u", ctx.unique)
 		IA_FLAG("--force-pot", "-2", ctx.forcePOT)
